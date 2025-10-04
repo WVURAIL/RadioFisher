@@ -87,7 +87,7 @@ def fisher_galaxy_survey( zmin, zmax, ngal, bias, cosmo, expt, cosmo_fns,
     
     # Calculate Vsurvey
     _z = np.linspace(zmin, zmax, 1000)
-    Vsurvey = C * scipy.integrate.simps(rr(_z)**2. / HH(_z), _z)
+    Vsurvey = C * scipy.integrate.simpson(rr(_z)**2. / HH(_z), x=_z)
     Vsurvey *= 4. * np.pi * expt['fsky']
     print("\tSurvey volume: %3.2f Gpc^3" % (Vsurvey/1e9))
     

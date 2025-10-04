@@ -673,7 +673,7 @@ def background_evolution_splines(cosmo, zmax=10., nsamples=500):
     E = np.sqrt( om * a**(-3.) + ok * a**(-2.) + omegaDE )
     _H = H0 * E
 
-    r_c = np.concatenate( ([0.], scipy.integrate.cumtrapz(1./E, _z)) )
+    r_c = np.concatenate( ([0.], scipy.integrate.cumulative_trapezoid(1./E, x=_z)) )
     if ok > 0.:
         _r = C/(H0*np.sqrt(ok)) * np.sinh(r_c * np.sqrt(ok))
     elif ok < 0.:
@@ -685,7 +685,7 @@ def background_evolution_splines(cosmo, zmax=10., nsamples=500):
     # N.B. D(z=0) = 1.
     a = 1. / (1. + _z)
     _f = fgrowth(cosmo, _z)
-    _D = np.concatenate( ([0.,], scipy.integrate.cumtrapz(_f, np.log(a))) )
+    _D = np.concatenate( ([0.,], scipy.integrate.cumulative_trapezoid(_f, x=np.log(a))) )
     _D = np.exp(_D)
 
     # Construct interpolating functions and return
@@ -705,7 +705,7 @@ def fsigma8_for_params(z, cosmo, zmax=10., usegamma=False):
     # Integrate linear growth rate to find linear growth factor, D(z)
     # N.B. D(z=0) = 1.
     _f = fgrowth(cosmo, _z, usegamma=usegamma)
-    _D = np.concatenate( ([0.,], scipy.integrate.cumtrapz(_f, np.log(a))) )
+    _D = np.concatenate( ([0.,], scipy.integrate.cumulative_trapezoid(_f, x=np.log(a))) )
     _D = np.exp(_D)
 
     # Construct interpolating functions and return
@@ -1214,14 +1214,14 @@ def integrate_grid(integrand, kgrid, ugrid):
     """
     Integrate over a 2D grid of sample points using the Simpson rule.
     """
-    Ik = [scipy.integrate.simps(integrand.T[i], ugrid) for i in range(kgrid.size)]
-    return scipy.integrate.simps(Ik, kgrid)
+    Ik = [scipy.integrate.simpson(integrand.T[i], x=ugrid) for i in range(kgrid.size)]
+    return scipy.integrate.simpson(Ik, x=kgrid)
 
 def integrate_grid_cumulative(integrand, kgrid, ugrid):
     """
     Integrate over a 2D grid of sample points using the Simpson rule.
     """
-    Ik = [scipy.integrate.simps(integrand.T[i], ugrid) for i in range(kgrid.size)]
+    Ik = [scipy.integrate.simpson(integrand.T[i], x=ugrid) for i in range(kgrid.size)]
 
     # Debugging plot of integrand I(k)
     if DBG_PLOT_CUMUL_INTEGRAND:
@@ -1229,7 +1229,7 @@ def integrate_grid_cumulative(integrand, kgrid, ugrid):
         P.plot(kgrid, Ik)
         P.xscale('log')
         P.show()
-    return scipy.integrate.cumtrapz(Ik, kgrid, initial=0.)
+    return scipy.integrate.cumulative_trapezoid(Ik, x=kgrid, initial=0.)
 
 def integrate_fisher_elements(derivs, kgrid, ugrid):
     """
@@ -1732,7 +1732,7 @@ def n_IM(kgrid, ugrid, cosmo, expt):
 
     # Calculate Vsurvey
     _z = np.linspace(zmin, zmax, 1000)
-    Vsurvey = C * scipy.integrate.simps(rr(_z)**2. / HH(_z), _z)
+    Vsurvey = C * scipy.integrate.simpson(rr(_z)**2. / HH(_z), x=_z)
     Vsurvey *= (4.*np.pi) * expt['Sarea'] / (4.*np.pi)
 
     return n_z, Vsurvey
@@ -2132,7 +2132,7 @@ def eos_fisher_matrix_derivs(cosmo, cosmo_fns, fsigma8=False):
         derivs_f = fsigma8_derivs(zz, cosmo, params=params, dx=dx)
 
     # Calculate comoving distance (including curvature)
-    r_c = scipy.integrate.cumtrapz(1./(aa**2. * EE), aa)
+    r_c = scipy.integrate.cumulative_trapezoid(1./(aa**2. * EE), x=aa)
     r_c = np.concatenate(([0.], r_c))
     if ok > 0.:
         r = C/(H0*np.sqrt(ok)) * np.sinh(r_c * np.sqrt(ok))
@@ -2142,7 +2142,7 @@ def eos_fisher_matrix_derivs(cosmo, cosmo_fns, fsigma8=False):
         r = C/H0 * r_c
 
     # Perform integrals needed to calculate derivs. of aperp
-    derivs_aperp = [(C/H0)/r[1:] * scipy.integrate.cumtrapz(f(aa)/(aa * EE)**2., aa)
+    derivs_aperp = [(C/H0)/r[1:] * scipy.integrate.cumulative_trapezoid(f(aa)/(aa * EE)**2., x=aa)
                         for f in fns]
 
     # Add additional term to curvature integral (idx 1)

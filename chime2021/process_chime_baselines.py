@@ -55,14 +55,14 @@ u = np.array([0.5*(edges[i+1] + edges[i]) for i in range(edges.size-1)]) # Centr
 nn = bins / (2. * np.pi * u * du)
 
 # Integrate n(u) to find normalisation (should give unity if no baseline cuts applied)
-norm = scipy.integrate.simps(2.*np.pi*nn*u, u)
+norm = scipy.integrate.simpson(2.*np.pi*nn*u, x=u)
 print("n(u) renorm. factor (should be close to unity):", 0.5 * Ndish * (Ndish - 1) / norm, "(not applied)")
 #n *= 0.5 * Ndish * (Ndish - 1) / norm
 
 # Optionally, average over all baselines below the cylinder width
 idxs = np.where(u < Ddish/l)
-n_mean = scipy.integrate.simps(2.*np.pi*nn[idxs]*u[idxs], u[idxs]) \
-          / scipy.integrate.simps(2.*np.pi*u[idxs], u[idxs])
+n_mean = scipy.integrate.simpson(2.*np.pi*nn[idxs]*u[idxs], x=u[idxs]) \
+          / scipy.integrate.simpson(2.*np.pi*u[idxs], x=u[idxs])
 if AVG_SMALL_BASELINES: nn[idxs] = n_mean
 
 # Convert to freq.-independent expression, n(x) = n(u) * nu^2,
