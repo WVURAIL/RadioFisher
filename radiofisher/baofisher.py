@@ -8,6 +8,8 @@ A number of functions can optionally use MPI (mpi4py).
 
 (Phil Bull & Pedro G. Ferreira, 2013--2014)
 """
+import os
+import shutil
 import numpy as np
 import scipy.integrate
 import scipy.interpolate
@@ -38,10 +40,11 @@ EXP_OVERFLOW_VAL = 250. # Max. value of exponent for np.exp() before assuming ov
 RSD_FUNCTION = 'kaiser'
 #RSD_FUNCTION = 'loeb'
 
-# Location of CAMB fiducial P(k) file
-# NOTE: Currently expects CAMB P(k) needs to be at chosen z value (z=0 here).
-CAMB_KMAX = 20. / 0.7 # Max. k for CAMB, in h Mpc^-1
-CAMB_EXEC = "/Users/sforeman/Dropbox/Research/CHIME/py/overview_paper_forecasts/venv/bin/" # Directory containing camb executable
+# Default k_max for CAMB computations
+CAMB_KMAX = 20. / 0.7 # h Mpc^-1
+
+# Find directory containing CAMB executable
+CAMB_EXEC = os.path.dirname(shutil.which('camb'))
 
 
 ################################################################################
