@@ -14,7 +14,7 @@ from rfwrapper import rf
 from radiofisher import euclid
 from radiofisher.units import *
 
-# Get a colorblind-frieldnly matplotlib color cycle, so that we can repeat colors easily in plots
+# Get a colorblind-friendly matplotlib color cycle, so that we can repeat colors easily in plots
 plt.style.use('tableau-colorblind10')
 prop_cycle = plt.rcParams['axes.prop_cycle']
 colors = prop_cycle.by_key()['color']
