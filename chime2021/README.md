@@ -1,20 +1,21 @@
-CHIME vs. DESI BAO Forecasts
-----------------------------
+# CHIME Overview configuration
 
-This directory contains files related to the BAO forecasts for CHIME and DESI
-shown in the CHIME instrument overview paper. I confine the ingredients to this
-directory as much as possible, but unfortunately, some changes to the main
-RadioFisher code were necessary. These changes should be obvious if you look
-at the commit history for this branch.
+This directory retains the two scientific inputs needed to identify the
+as-built CHIME configuration used for the CHIME instrument overview forecast:
 
-To run the forecasts:
+- `experiments_CHIME.py`, the experiment dictionary; and
+- `array_config/nx_CHIME_800.dat`, the processed baseline-density table for
+  the four-cylinder, 1,024-feed layout.
 
- - Generate the CHIME baseline distribution with
-   `generate_chime_baseline_distribution.py`.
- - Bin the baseline distribution with `process_chime_baselines.py`.
- - Generate the DESI Fisher matrix with `galaxy_full_experiment.py`.
- - Generate the CHIME Fisher matrix with `full_experiment.py`.
- - Generate the D_V(z) errorbar forecast plot with `plot_dv_forecasts.py`.
+The old forecast, DESI, plotting, and baseline-generation frontends were
+removed from the active 1.0 tree. They were Python 2 campaign scripts with
+fixed paths and missing or generated inputs, not supported package APIs. Use
+Git history if their methodology is needed, then port the relevant calculation
+to the current `radiofisher` package and record all resolved inputs.
 
-These forecasts are the product of combined efforts by Tianyue Chen and Simon
+`experiments_CHIME.py` is deliberately importable from a source checkout and
+uses the tracked baseline table above. It is not installed as part of the
+`radiofisher` wheel.
+
+The forecast was produced through combined efforts by Tianyue Chen and Simon
 Foreman.

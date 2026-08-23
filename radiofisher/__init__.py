@@ -1,10 +1,150 @@
 
-from .baofisher import *
-from .units import *
-from . import euclid
+from .backend import (
+    BACKEND_API_VERSION,
+    BACKEND_CAPABILITIES,
+    BACKEND_ID,
+    BACKEND_VERSION,
+    get_backend_capabilities,
+)
+from .astrophysics import (
+    ASTROPHYSICAL_MODEL_KEYS,
+    ASTROPHYSICAL_MODEL_OPTIONS,
+    ASTROPHYSICAL_MODEL_PROFILES,
+    ASTROPHYSICAL_PROFILE_KEY,
+    DEFAULT_ASTROPHYSICAL_MODELS,
+    get_astrophysical_profile,
+    resolve_astrophysical_models,
+    validate_astrophysical_model,
+    with_astrophysical_profile,
+)
+from .extensions import (
+    DEFAULT_NOISE_FREQ_MODE,
+    NOISE_FREQUENCY_SAMPLES,
+    NOISE_FREQ_MODES,
+    frequency_noise_penalty,
+    validate_experiment_extensions,
+    validate_volume_fraction,
+)
+from .resources import (
+    UnavailableExperimentData,
+    UnsupportedExperimentDataError,
+    validate_experiment_resources,
+)
+from .baofisher import (
+    Cfg,
+    Cnoise,
+    Csignal,
+    Ez,
+    Tb,
+    add_fisher_list,
+    add_fisher_matrices,
+    background_evolution_splines,
+    bias_HI,
+    combined_fisher_matrix,
+    convert_to_camb,
+    ellipse_for_fisher_params,
+    eos_fisher_matrix_derivs,
+    expand_fisher_matrix,
+    fgrowth,
+    fgrowth_k,
+    figure_of_merit,
+    fisher,
+    fisher_integrands,
+    fisher_with_excluded_params,
+    fsigma8_for_params,
+    indices_for_param_names,
+    load_param_names,
+    load_power_spectrum,
+    n_IM,
+    omega_HI,
+    physical_density_parameters,
+    transform_to_lss_distances,
+    zbins_const_dnu,
+    zbins_const_dr,
+    zbins_equal_spaced,
+    zbins_fixed,
+    zbins_split_width,
+)
+from .units import C, D2RAD, HRS_MHZ, PI
+from . import astrophysics
 from . import camb_wrapper
+from . import euclid
 from . import experiments
-from . import experiments_galaxy
 from . import fisher_galaxy as galaxy
 from . import mg_growth
 from . import read_config
+
+__version__ = BACKEND_VERSION
+
+# The package root deliberately exposes only the supported surface below.
+# Implementation-module imports such as ``radiofisher.np`` are not API.
+__all__ = [
+    "__version__",
+    "BACKEND_API_VERSION",
+    "BACKEND_CAPABILITIES",
+    "BACKEND_ID",
+    "BACKEND_VERSION",
+    "get_backend_capabilities",
+    "ASTROPHYSICAL_MODEL_KEYS",
+    "ASTROPHYSICAL_MODEL_OPTIONS",
+    "ASTROPHYSICAL_MODEL_PROFILES",
+    "ASTROPHYSICAL_PROFILE_KEY",
+    "DEFAULT_ASTROPHYSICAL_MODELS",
+    "get_astrophysical_profile",
+    "resolve_astrophysical_models",
+    "validate_astrophysical_model",
+    "with_astrophysical_profile",
+    "DEFAULT_NOISE_FREQ_MODE",
+    "NOISE_FREQUENCY_SAMPLES",
+    "NOISE_FREQ_MODES",
+    "frequency_noise_penalty",
+    "validate_experiment_extensions",
+    "validate_volume_fraction",
+    "UnavailableExperimentData",
+    "UnsupportedExperimentDataError",
+    "validate_experiment_resources",
+    "C",
+    "D2RAD",
+    "HRS_MHZ",
+    "PI",
+    "Cnoise",
+    "Csignal",
+    "Cfg",
+    "Tb",
+    "bias_HI",
+    "omega_HI",
+    "physical_density_parameters",
+    "convert_to_camb",
+    "load_power_spectrum",
+    "background_evolution_splines",
+    "fgrowth",
+    "fgrowth_k",
+    "Ez",
+    "fsigma8_for_params",
+    "fisher",
+    "fisher_integrands",
+    "n_IM",
+    "zbins_fixed",
+    "zbins_equal_spaced",
+    "zbins_const_dr",
+    "zbins_const_dnu",
+    "zbins_split_width",
+    "combined_fisher_matrix",
+    "add_fisher_matrices",
+    "add_fisher_list",
+    "fisher_with_excluded_params",
+    "indices_for_param_names",
+    "load_param_names",
+    "eos_fisher_matrix_derivs",
+    "expand_fisher_matrix",
+    "transform_to_lss_distances",
+    "figure_of_merit",
+    "ellipse_for_fisher_params",
+    "camb_wrapper",
+    "astrophysics",
+    "euclid",
+    "experiments",
+    "galaxy",
+    "mg_growth",
+    "read_config",
+]

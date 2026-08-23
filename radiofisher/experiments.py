@@ -1,6 +1,8 @@
 import numpy as np
-import scipy.interpolate
-from .units import *
+from types import MappingProxyType
+
+from .units import D2RAD, HRS_MHZ
+from .resources import UnavailableExperimentData, bundled_baseline_path
 
 # Define fiducial cosmology and parameters
 # Planck-only best-fit parameters, from Table 2 of Planck 2013 XVI.
@@ -98,21 +100,6 @@ exptM = {
     'Dmin':             4.                 # Min. interferom. baseline [m]
     }
 exptM.update(SURVEY)
-
-exptL = {
-    'mode':             'combined',        # Interferometer or single dish
-    'Ndish':            250,               # No. of dishes
-    'Nbeam':            1,                 # No. of beams (for multi-pixel detectors)
-    'Ddish':            15.,               # Single dish diameter [m]
-    'Tinst':            20.*(1e3),         # System temp. [mK]
-    'survey_dnutot':    700.,              # Total bandwidth of *entire* survey [MHz]
-    'survey_numax':     1100.,             # Max. freq. of survey
-    'dnu':              0.1,               # Bandwidth of single channel [MHz]
-    'Sarea':            25e3*(D2RAD)**2.,  # Total survey area [radians^2]
-    'Dmax':             600.,              # Max. interferom. baseline [m]
-    'Dmin':             15.                # Min. interferom. baseline [m]
-    }
-exptL.update(SURVEY)
 
 # Matched to Euclid redshift/Sarea
 exptCV = {
@@ -326,6 +313,8 @@ CHIME = {
     'Sarea':            25e3*(D2RAD)**2.,  # Total survey area [radians^2]
     'Dmax':             128.,              # Max. interferom. baseline [m]
     'Dmin':             20.,               # Min. interferom. baseline [m]
+    # Legacy 5-cylinder table. Do not substitute the tracked chime2021 table,
+    # which describes the as-built 4-cylinder/1024-feed instrument.
     'n(x)': "array_config/nx_CHIME_800.dat" # Interferometer antenna density
     }
 CHIME.update(SURVEY)
@@ -821,7 +810,7 @@ MID_B1_Rebase = {
     }
 MID_B1_Rebase.update(SURVEY)
 
-MID_B1_Octave = {
+MID_B1_Octave_Updated = {
     'mode':             'hybrid',          # Interferometer or single dish
     'Ndish':            130,               # No. of dishes (MID dishes)
     'Ndish2':           64,                # No. of dishes (MeerKAT dishes)
@@ -842,7 +831,7 @@ MID_B1_Octave = {
     'Sarea':            25e3*(D2RAD)**2.,  # Total survey area [radians^2]
     'n(x)': "array_config/nx_SKAMREF2_dec30_200.dat" # Interferometer antenna density
     }
-MID_B1_Octave.update(SURVEY)
+MID_B1_Octave_Updated.update(SURVEY)
 
 MID_B2_Rebase = {
     'mode':             'hybrid',          # Interferometer or single dish
@@ -922,29 +911,6 @@ MID_B1_Alt = {
     'n(x)': "array_config/nx_SKAMREF2_dec30_200.dat" # Interferometer antenna density
     }
 MID_B1_Alt.update(SURVEY)
-
-MID_B1_Octave = {
-    'mode':             'hybrid',          # Interferometer or single dish
-    'Ndish':            130,               # No. of dishes (MID dishes)
-    'Ndish2':           64,                # No. of dishes (MeerKAT dishes)
-    'Nbeam':            1,                 # No. of beams (for multi-pixel detectors)
-    'Ddish':            15.,               # Single dish diameter [m]
-    'Ddish2':           13.5,              # Single dish diameter (2) [m]
-    'effic':            0.75,              # Aperture efficiency
-    'effic2':           0.80,              # Aperture efficiency
-    'Tinst':            12.*(1e3),         # System temp. [mK]
-    'Tinst2':           19.*(1e3),         # System temp. (2) [mK]
-    'survey_dnutot':    450.,              # Total bandwidth of *entire* survey [MHz]
-    'survey_numax':     950.,              # Max. freq. of *entire* survey
-    'array_numax1':     925.,              # Max. freq. of survey 1
-    'array_numax2':     950.,              # Max. freq. of survey 2
-    'array_dnutot1':    425.,              # Total bandwidth of array 1 [MHz]
-    'array_dnutot2':    370.,              # Total bandwidth of array 2 [MHz]
-    'dnu':              0.1,               # Bandwidth of single channel [MHz]
-    'Sarea':            25e3*(D2RAD)**2.,   # Total survey area [radians^2]
-    'n(x)': "array_config/nx_SKAMREF2_dec30_200.dat" # Interferometer antenna density
-    }
-MID_B1_Octave.update(SURVEY)
 
 MID_B2_Base = {
     'mode':             'dish',            # Interferometer or single dish
@@ -1385,3 +1351,51 @@ MeerKAT_Lband = {
     'n(x)': "array_config/nx_MKREF2_dec30.dat" # Interferometer antenna density
     }
 MeerKAT_Lband.update(SURVEY)
+
+
+def _finalize_experiment_resources():
+    """Resolve bundled baselines and mark genuinely unavailable presets."""
+
+    supported = {}
+    unsupported = {}
+    removed_optional = {}
+    for name, preset in list(globals().items()):
+        if name.startswith("_") or not isinstance(preset, dict) \
+                or "mode" not in preset:
+            continue
+
+        reference = preset.get("n(x)")
+        if isinstance(reference, str):
+            bundled = bundled_baseline_path(reference)
+            if bundled is not None:
+                preset["n(x)"] = str(bundled)
+            elif preset["mode"] in {"dish", "hybrid"}:
+                # Autocorrelation calculations do not consume n(x). Remove
+                # the stale optional interferometer table rather than making
+                # an otherwise runnable preset depend on unshipped data.
+                removed_optional[name] = reference
+                del preset["n(x)"]
+            else:
+                marker = UnavailableExperimentData(name, "n(x)", reference)
+                preset["n(x)"] = marker
+                unsupported[name] = marker
+
+        if name not in unsupported:
+            supported[name] = preset
+
+    return supported, unsupported, removed_optional
+
+
+(
+    _supported_experiment_presets,
+    _unsupported_experiment_presets,
+    _removed_optional_baseline_references,
+) = _finalize_experiment_resources()
+
+SUPPORTED_EXPERIMENT_PRESETS = MappingProxyType(_supported_experiment_presets)
+UNSUPPORTED_EXPERIMENT_PRESETS = MappingProxyType(
+    _unsupported_experiment_presets
+)
+REMOVED_OPTIONAL_BASELINE_REFERENCES = MappingProxyType(
+    _removed_optional_baseline_references
+)

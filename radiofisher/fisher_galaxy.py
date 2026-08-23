@@ -3,14 +3,16 @@
 Calculate Fisher matrix for a galaxy redshift survey, using the formalism 
 from the Euclid cosmology white paper (arXiv:1206.1225; see Sect. 1.7.3).
 """
-import numpy as np
-import pylab as P
-import scipy.integrate
-from . import baofisher as rf
-from .units import *
 import copy
 
+import numpy as np
+import scipy.integrate
+
+from . import baofisher as rf
+from .units import C
+
 RSD_FUNCTION = 'not kaiser'
+GALAXY_VOLUME_SAMPLES = 1000
 
 def Csignal_galaxy(q, y, cosmo, expt):
     """
@@ -49,7 +51,7 @@ def Csignal_galaxy(q, y, cosmo, expt):
 
 
 def fisher_galaxy_survey( zmin, zmax, ngal, bias, cosmo, expt, cosmo_fns, 
-                          switches=[], massive_nu_fn=None, kbins=None, 
+                          switches=None, massive_nu_fn=None, kbins=None,
                           return_pk=False ):
     """
     Calculate Fisher matrix for a galaxy redshift survey.
@@ -71,6 +73,9 @@ def fisher_galaxy_survey( zmin, zmax, ngal, bias, cosmo, expt, cosmo_fns,
         are 'sdbias' (scale-dep. bias parameter b_1), and 'mg' (modified 
         gravity parameters gamma0, gamma1, eta0, eta1, alphaxi)
     """
+    if switches is None:
+        switches = []
+
     # Copy, to make sure we don't modify input expt or cosmo
     cosmo = copy.deepcopy(cosmo)
     expt = copy.deepcopy(expt)
@@ -86,7 +91,7 @@ def fisher_galaxy_survey( zmin, zmax, ngal, bias, cosmo, expt, cosmo_fns,
     cosmo['ngal'] = ngal
     
     # Calculate Vsurvey
-    _z = np.linspace(zmin, zmax, 1000)
+    _z = np.linspace(zmin, zmax, GALAXY_VOLUME_SAMPLES)
     Vsurvey = C * scipy.integrate.simpson(rr(_z)**2. / HH(_z), x=_z)
     Vsurvey *= 4. * np.pi * expt['fsky']
     print("\tSurvey volume: %3.2f Gpc^3" % (Vsurvey/1e9))

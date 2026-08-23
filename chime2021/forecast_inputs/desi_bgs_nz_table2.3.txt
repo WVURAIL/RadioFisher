@@ -1,7 +1,0 @@
-# Source: Table 2.5 of https://arxiv.org/abs/1611.00036
-# z | dN_BGS/dz [gal / dz / deg^2]
-0.05	1165
-0.15	3074
-0.25	1909
-0.35	732
-0.45	120

@@ -15,53 +15,6 @@ def covmat_for_fom(sig_x, sig_y, fom, sgn=1.):
     cov = np.array( [[sig_x**2., sig_xy], [sig_xy, sig_y**2.]] )
     return cov
 
-def add_planck_prior(F, lbls, info=False):
-    """
-    Add Planck prior to a given Fisher matrix.
-    """
-    print("WARNING: add_planck_prior() is obsolete.")
-    #lbls_planck = ['omegak', 'omegaDE', 'w0', 'wa']
-    lbls_planck = ['w0', 'wa', 'omegaDE', 'omegak', 'w_m', 'w_b', 'n_s']
-    
-    Fpl = F.copy()
-    for ii in range(len(lbls_planck)):
-      if lbls_planck[ii] in lbls:
-        for jj in range(len(lbls_planck)):
-          if lbls_planck[jj] in lbls:
-            _i = lbls.index(lbls_planck[ii])
-            _j = lbls.index(lbls_planck[jj])
-            Fpl[_i,_j] += planck_prior_full[ii,jj]
-            if info: print(lbls[_i], lbls_planck[ii], "//", lbls[_j], lbls_planck[jj])
-      if lbls_planck[ii] not in lbls:
-        if info: print("Planck prior:", lbls_planck[ii], "not found in Fisher matrix.")
-    return Fpl
-
-def add_detf_planck_prior(F, lbls, info=False):
-    """
-    Add Planck prior from DETF. See process_detf_planck_fisher.py for details 
-    of its construction.
-    """
-    F_planck = np.genfromtxt("fisher_detf_planck.dat")
-    lbls_planck = ['n_s', 'omegaM', 'omegab', 'omegak', 'omegaDE', 
-                   'h', 'w0', 'wa', 'logA_S']
-    
-    # FIXME: Should add nuisance parameters to Fisher matrix.
-    print("FIXME: add_detf_planck_prior() should add nuisance parameters too.")
-    
-    # Add prior
-    Fpl = F.copy()
-    for ii in range(len(lbls_planck)):
-      if lbls_planck[ii] in lbls:
-        for jj in range(len(lbls_planck)):
-          if lbls_planck[jj] in lbls:
-            _i = lbls.index(lbls_planck[ii])
-            _j = lbls.index(lbls_planck[jj])
-            Fpl[_i,_j] += F_planck[ii,jj]
-            if info: print(lbls[_i], lbls_planck[ii], "//", lbls[_j], lbls_planck[jj])
-      if lbls_planck[ii] not in lbls:
-        if info: print("Planck prior:", lbls_planck[ii], "not found in Fisher matrix.")
-    return Fpl
-
 def euclid_to_rf(F, cosmo):
     """
     Transform Planck prior from Euclid science review, Amendola (et al. 2012), 

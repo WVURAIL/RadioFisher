@@ -1,131 +1,133 @@
-RadioFisher/BAO-21cm
---------------------
-Phil Bull (philbull@gmail.com)
+# RadioFisher
 
-_November 2020_
+RadioFisher forecasts cosmological constraints from neutral-hydrogen 21-cm
+intensity-mapping experiments and spectroscopic galaxy surveys. The formalism
+is described in Bull, Ferreira, Patel, and Santos (2015).
 
-Cosmology Fisher forecasting code for HI (21cm) intensity mapping experiments
-and spectroscopic galaxy surveys.
+## Supported surface
 
-Released under the Academic Free License (AFL-3.0).
+Version 1.0 is a Python 3 package rather than a collection of executable
+forecast scripts. The supported surface is the importable `radiofisher`
+package, its explicit `__all__`, and the tests in `tests/`. Python 3.10 or newer
+is required.
 
-ABOUT RADIOFISHER
------------------
+Historical Python 2, MPI, plotting, and campaign-specific frontends were
+removed from the active tree for 1.0. They depended on missing private inputs,
+fixed output paths, or obsolete interfaces. They remain available from Git
+history when reproducing an older publication. Port a required workflow to the
+current package and validate all external inputs instead of running an old
+script unchanged.
 
-RadioFisher is a Fisher forecasting code for cosmology with intensity maps of 
-the redshifted 21cm emission line of neutral hydrogen. The formalism 
-implemented by this code is described in Bull, Ferreira, Patel and Santos 
-(2014). It's written in Python, and makes heavy use of NumPy, SciPy, and 
-matplotlib. You also need CAMB. I'm running it very happily on Ubuntu 20.04 and 
-other Linux machines. It should also run fine on Macs.
+Install a checkout and run the supported tests with:
 
-The code is provided openly for inspection and re-use. If you use it, please 
-cite us! If you have problems getting it to work, or have bugfixes, comments, 
-or suggestions, please get in touch with me. This is an actively-used scientific 
-code, so expect to have to get your hands dirty!
+```console
+python -m pip install -e '.[test]'
+python -m pytest
+```
 
-REQUIREMENTS
-------------
+NumPy, SciPy, and matplotlib are installed as core dependencies. An external
+CAMB executable is optional: it is needed to generate a new matter-power
+spectrum, but not to load a validated precomputed spectrum.
 
- - Python (tested with 3.7)
- - Recent NumPy and SciPy
- - matplotlib
- - mpi4py
- - CAMB (http://camb.info/)
+## Backend integration contract
 
-INSTALLATION
-------------
+Downstream software should inspect the stable metadata instead of inferring
+features from a branch name or arbitrary experiment-dictionary keys:
 
-This is a collection of Python scripts, none of which need to be compiled or 
-installed before use. However, you should compile CAMB and change the CAMB_EXEC 
-variable in baofisher.py to point at this executable.
+```python
+import radiofisher
 
-GETTING STARTED
----------------
+assert radiofisher.BACKEND_ID == "radiofisher"
+assert radiofisher.BACKEND_VERSION == "1.0.0"
+assert radiofisher.BACKEND_API_VERSION == 1
+capabilities = radiofisher.get_backend_capabilities()
+```
 
-To get started, check out the git repository and make sure you have Python 2.7 
-and up-to-date versions of SciPy, NumPy, and matplotlib installed. You should 
-also download and compile CAMB. It also helps if you install mpi4py too; 
-although most of the Fisher forecasting code in baofisher.py doesn't need MPI, 
-the full_experiment.py frontend code does. Finally, in order to use some of the 
-existing experiment definitions, you’ll need to download the interferometer 
-baselines package* and unpack it in the array_config/ subdirectory.
-*[http://philbull.com/radiofisher_array_config.tar.gz; 5 MB]
+The capability set is immutable. Backend API version 1 supports explicit
+physical densities, named astrophysical-model profiles,
+frequency-dependent noise weights in `invvar` or `fourier` mode, a surviving
+survey-volume fraction, and the `P_res` additive-bias response. Extension
+values are validated and malformed inputs fail closed.
 
-Next, edit the CAMB_EXEC variable at the top of baofisher.py to point at the 
-directory where the CAMB executable resides (not the CAMB executable itself). 
-At the moment, you also need to create a subdirectory called output/.
+The package release is 1.0.0, while the backend API remains version 1 because
+these integration semantics did not change during the cleanup.
 
-Now, to run your first forecast, call `mpirun -n 1 ./full_experiment.py 0`. This 
-will run a forecast for the first experiment listed in full_experiment.py using 
-only one processor, and it will take quite a while (several minutes, usually). 
-This is because the first time you run it, CAMB runs and produces a 
-high-resolution P(k) for your fiducial cosmology. This is cached, so subsequent 
-runs are much faster.
+## Cosmology and signal conventions
 
-Output is stored in the output/ subdirectory. Look inside full_experiment.py to 
-see what's saved; it's mostly a Fisher matrix per redshift bin (variable names 
-are in the header of each file), and some auxiliary information about redshift 
-bins, functions of redshift, and the binning of P(k) in k space.
+`omega_M_0` is interpreted as total matter, including massive neutrinos.
+`physical_density_parameters()` therefore subtracts both baryon and neutrino
+density when deriving cold dark matter. For an unambiguous conversion, provide
+the complete `ombh2`, `omch2`, and `omnuh2` triplet. Set
+`omega_M_0_includes_neutrinos=False` only when intentionally reading an older
+cosmology in which `omega_M_0` meant baryons plus cold dark matter.
 
-The next time you run, try changing the first and second numbers, i.e. 
-`mpirun -n <nproc> ./full_experiment.py <experiment-id>`. Each redshift bin is 
-processed as a separate unit. Redshift bins are divided up between the 
-available CPUs. There is no point setting <nproc> higher than the number of 
-redshift bins for a given experiment.
+Signal evolution can be pinned to a named profile:
 
-To process the output of the forecasts, try one of the plot_*.py scripts. 
-You'll probably have to edit it first to specify which experiments you want to 
-see (lists of experiments are always specified near the top of the script).
+```python
+cosmo = radiofisher.with_astrophysical_profile(cosmo, "bull2015")
+# Tb_model = bias_HI_model = omega_HI_model = "powerlaw"
 
-WORKING WITH THE CODE
----------------------
+cosmo = radiofisher.with_astrophysical_profile(
+    cosmo, "chime_overview_2022"
+)
+# Tb_model / bias_HI_model / omega_HI_model = hall / castorina / crighton
+```
 
-Here are some key files that you should know about. Make sure you look inside 
-them; they're heavily commented and pretty much everything has a Python 
-docstring.
+`fisher()` also accepts those three model keys directly. If they are absent,
+the Hall/Castorina/Crighton defaults are used. Unknown profiles or model names
+raise `ValueError`.
 
- * baofisher.py: Most of the forecasting code and a large number of helper 
-                 functions are kept here.
- * full_experiment.py: Script for running a full forecast for a given 
-                 experiment.
- * experiments.py: Specifications for a large number of experiments are defined 
-                 here, as well as survey parameters and the fiducial 
-                 cosmological parameters. Some of them need auxiliary baseline 
-                 distribution files; these will be made public soon, but in the 
-                 meantime just email me if you need them.
- * galaxy_full_experiment.py: Runs a forecast for a galaxy redshift survey 
-                 rather than an IM survey.
- * plot_dlogp.py: Plots constraints on P(k) for given experiments. This is a 
-                 useful first plotting script to use.
- * plot_w0wa.py: Another useful plotting script to look at, as it works with 
-                 cosmological parameters rather than just P(k) on its own.
+## Repository data
 
-NOTES ON MPI
-------------
+`radiofisher/data/array_config/` contains the baseline tables used by runnable
+experiment presets and is included in the wheel. Public presets are split into
+`experiments.SUPPORTED_EXPERIMENT_PRESETS` and
+`experiments.UNSUPPORTED_EXPERIMENT_PRESETS`. The latter retain useful
+instrument geometry but carry an explicit unavailable-data marker; forecasting
+raises `UnsupportedExperimentDataError` until the caller replaces `n(x)` with
+a verified path or callable. The exception is available as
+`radiofisher.UnsupportedExperimentDataError`. Stale optional `n(x)` references were removed
+from autocorrelation-only dish and hybrid presets.
 
-As mentioned above, there is no point using more processors than an experiment 
-has redshift bins, since the extra processors will just sit around idle.
+The old `experiments_galaxy` preset catalog was removed because none of its 36
+file-backed number-density inputs were distributed. The generic
+`radiofisher.galaxy.fisher_galaxy_survey()` algorithm remains available for
+callers that supply number density, bias, cosmology, and survey configuration
+directly.
 
-You may find that your installation of SciPy/NumPy or CAMB causes some weird 
-behaviour and hogs a lot of processor sometimes when this code is running. This 
-might be caused by a conflict between MPI (which Radio Fisher uses) and OpenMP 
-(which some of the libraries just mentioned have optional support for). Try 
-calling the script with OMP_NUM_THREADS=2 or some other low number, e.g. 
-`OMP_NUM_THREADS=2 mpirun -n 20 ./full_experiment.py 4`.
+`chime2021/experiments_CHIME.py` and
+`chime2021/array_config/nx_CHIME_800.dat` preserve the CHIME Overview
+as-built configuration used by the supported BAO integration. They are source
+checkout data rather than installed package modules. See
+`chime2021/README.md` for the boundary.
 
-CITING THIS CODE
-----------------
+Experiment dictionaries are mutable. Copy a preset before applying overrides,
+and archive the resolved dictionary, backend metadata, physical-density
+convention, external-input hashes, and CAMB settings with every scientific
+output.
 
-If you use this code in a scientific work, please cite us! The relevant paper 
-is the following:
+## 1.0 migration notes
 
-Philip Bull, Pedro G. Ferreira, Prina Patel, and Mario Santos, 
-ApJ 803, 21 (2015) [arXiv:1405.1452] [doi:10.1088/0004-637X/803/1/21].
+- The ambiguous unqualified `experiments.MID_B1_Octave` name and its legacy
+  duplicate were removed. Use `experiments.MID_B1_Octave_Updated`.
+- The empty `FisherMatrix` placeholder was removed. Fisher matrices are NumPy
+  arrays manipulated by the module-level matrix functions.
+- Package-root star imports no longer leak implementation-module names.
+- `n_IM()` now requires its redshift range and cosmology functions explicitly.
+- Obsolete Planck-prior helpers with hard-coded, unavailable files were
+  removed from `euclid`.
+- The illustrative `exptL` preset was removed because its combined observing
+  mode has never been implemented.
+- The unusable file-backed `experiments_galaxy` preset catalog was removed;
+  the data-independent galaxy Fisher algorithm remains supported.
 
-PROBLEMS / BUGS
----------------
+## Citation and license
 
-Email me (philbull@gmail.com) with bug reports, patches, requests for features 
-and so on. I'll be happy to help/fix things.
+If you use RadioFisher in scientific work, cite Philip Bull, Pedro G.
+Ferreira, Prina Patel, and Mario Santos, “Late-time cosmology with 21 cm
+intensity mapping experiments,” *The Astrophysical Journal* **803**, 21
+(2015), [arXiv:1405.1452](https://arxiv.org/abs/1405.1452),
+[doi:10.1088/0004-637X/803/1/21](https://doi.org/10.1088/0004-637X/803/1/21).
 
+RadioFisher is distributed under the Academic Free License 3.0. The original
+author is Philip Bull; the current repository is maintained by WVURAIL.

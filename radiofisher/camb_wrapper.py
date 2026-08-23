@@ -87,17 +87,23 @@ def run_camb(params_fname, camb_exec_dir):
     for CAMB to finish before returning. Returns a dictionary of derived values 
     output by CAMB to stdout.
     """
-    # Change directory and call CAMB
-    cwd = os.getcwd()
-    os.chdir(camb_exec_dir)
-    params_path = cwd + "/paramfiles/" + params_fname
+    # Run CAMB in its own directory without mutating process-global cwd. This
+    # is safe for exceptions, threads, notebooks, and downstream libraries.
+    caller_cwd = os.getcwd()
+    camb_exec_dir = os.path.abspath(os.fspath(camb_exec_dir))
+    params_path = os.path.abspath(
+        os.path.join(caller_cwd, "paramfiles", os.fspath(params_fname))
+    )
+    camb_executable = os.path.join(camb_exec_dir, "camb")
     print("Running CAMB on", params_path)
-    output = subprocess.check_output(["./camb", params_path])
+    output = subprocess.check_output(
+        [camb_executable, params_path], cwd=camb_exec_dir, text=True
+    )
     
     # Capture on-screen output of derived parameters
     vals = {}
     print(output)
-    for line in str(output).split("\n"):
+    for line in output.splitlines():
         # Special cases: sigma8 and tau_recomb
         if "sigma8" in line:
             s8line = line[line.find('sigma8'):] # Only get sigma8 part of string
@@ -113,11 +119,8 @@ def run_camb(params_fname, camb_exec_dir):
             try:
                 key, val = line.split("=")
                 vals[key.strip()] = float(val)
-            except:
+            except (TypeError, ValueError):
                 pass
-    
-    # Change back to the original directory
-    os.chdir(cwd)
     return vals
 
 def comoving_dist(a, cosmo):

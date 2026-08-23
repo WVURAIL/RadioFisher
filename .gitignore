@@ -1,8 +1,27 @@
-*.png
-*.npy
-*.pyc
-*.pdf
-*.dat
-old/*
-old_code/*
-paramfiles/*
+# Python caches and package builds
+*.py[cod]
+__pycache__/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.coverage
+htmlcov/
+.venv/
+
+# Generated forecast products and CAMB caches
+/output/
+/outputs/
+/paramfiles/
+/cache*.dat
+/fisher_bao_*.dat
+/snr-*.npy
+/chime2021/cache*.dat
+
+# Generated root-level figures (documentation assets elsewhere remain visible)
+/*.png
+/*.pdf
+
+# Historical local scratch directories
+/old/
+/old_code/

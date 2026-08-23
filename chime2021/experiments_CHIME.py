@@ -2,10 +2,8 @@
 Alternative version of radiofisher/experiments.py, featuring updated CHIME parameters.
 """
 import numpy as np
-import scipy.interpolate
 
-from rfwrapper import rf
-from radiofisher.units import *
+from radiofisher.units import D2RAD, HRS_MHZ
 
 # Define fiducial cosmology and parameters
 # Planck-only best-fit parameters, from Table 1 of 1807.06209.
@@ -24,7 +22,7 @@ cosmo = {
     'w0':               -1.,
     'wa':               0.,
     'fNL':              0.,
-    'mnu':              0.06, # meV
+    'mnu':              0.06, # eV
     'k_piv':            0.05, # n_s
     'aperp':            1.,
     'apar':             1.,

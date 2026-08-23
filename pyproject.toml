@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "radiofisher"
+dynamic = ["version"]
+description = "Fisher forecasting for HI 21-cm intensity-mapping surveys"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [{name = "Philip Bull"}]
+dependencies = [
+  "matplotlib>=3.5",
+  "numpy>=1.23",
+  "scipy>=1.9",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.urls]
+Repository = "https://github.com/WVURAIL/RadioFisher"
+
+[tool.setuptools.packages.find]
+include = ["radiofisher*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "radiofisher.backend.BACKEND_VERSION"}
+
+[tool.setuptools.package-data]
+radiofisher = ["data/array_config/*.dat"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
