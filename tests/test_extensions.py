@@ -5,6 +5,7 @@ import scipy.interpolate
 from radiofisher.extensions import (
     DELAY_TRANSITION_FACTOR,
     delay_cut_kpar_min,
+    delay_transfer_fn,
     frequency_noise_penalty,
     validate_experiment_extensions,
     validate_kpar_min,
@@ -154,3 +155,60 @@ def test_delay_cut_rejects_malformed_inputs():
         delay_cut_kpar_min(100e-9, lambda z: 70.0, 0.0)
     with pytest.raises(ValueError, match="H"):
         delay_cut_kpar_min(100e-9, lambda z: -70.0, 1420.406)(1.0)
+
+
+def test_delay_transfer_squares_the_normalised_response():
+    """T = (R / R_plateau)^2 at tau / tau_cut, zero below the table, and
+    the last value above it. At 200 ns and z = 1.16, tau / tau_cut = 1.4
+    is k_par = 0.351 h/Mpc, the hard cut's threshold."""
+    ratio = [1.0, 1.2, 1.4, 2.0, 4.0]
+    response = [0.0, 0.6, 0.8, 0.85, 0.87]
+    transfer_fn = delay_transfer_fn(
+        200e-9, lambda z: PLANCK2018_H_AT_1P16, 1420.406, ratio, response)
+
+    kpar_at_1p4 = 0.351 * PLANCK2018_H   # Mpc^-1, tau / tau_cut = 1.4
+    kpar = np.array([0.0, 0.5, 1.0, 1.4, 2.0, 10.0]) / 1.4 * kpar_at_1p4
+    transfer = transfer_fn(kpar, 1.16)
+
+    assert transfer.shape == kpar.shape
+    assert transfer[0] == 0.0 and transfer[1] == 0.0          # below table
+    assert transfer[2] == pytest.approx(0.0)                   # R = 0 at 1.0
+    assert transfer[3] == pytest.approx((0.8 / 0.87) ** 2, rel=2e-2)
+    assert transfer[4] == pytest.approx((0.85 / 0.87) ** 2, rel=2e-2)
+    assert transfer[5] == pytest.approx(1.0)                   # past the end
+    assert np.all((transfer >= 0.0) & (transfer <= 1.0))
+    # a negative k_par is the same mode
+    assert transfer_fn(-kpar, 1.16) == pytest.approx(transfer)
+
+
+def test_delay_transfer_plateau_override_and_scaling_with_tau_cut():
+    ratio = [1.0, 2.0]
+    response = [0.5, 1.0]
+    at_200 = delay_transfer_fn(200e-9, lambda z: 70.0, 1420.406, ratio,
+                               response, plateau=2.0)
+    at_100 = delay_transfer_fn(100e-9, lambda z: 70.0, 1420.406, ratio,
+                               response, plateau=2.0)
+    kpar = np.array([0.05, 0.1])
+
+    # plateau 2.0 halves the normalised response: (1.0 / 2.0)^2 at the end
+    assert at_200(kpar, 1.0)[-1] <= 0.25
+    # halving tau_cut doubles tau / tau_cut at fixed k_par: the 100 ns
+    # transfer at k equals the 200 ns transfer at 2k
+    assert at_100(kpar, 1.0) == pytest.approx(at_200(2.0 * kpar, 1.0))
+
+
+def test_delay_transfer_rejects_malformed_tables():
+    hubble = lambda z: 70.0
+    with pytest.raises(ValueError, match="increasing"):
+        delay_transfer_fn(200e-9, hubble, 1420.406, [1.0, 1.0], [0.0, 1.0])
+    with pytest.raises(ValueError, match="matching"):
+        delay_transfer_fn(200e-9, hubble, 1420.406, [1.0, 2.0], [1.0])
+    with pytest.raises(ValueError, match="non-negative"):
+        delay_transfer_fn(200e-9, hubble, 1420.406, [1.0, 2.0], [-0.1, 1.0])
+    with pytest.raises(ValueError, match="tau_cut_s"):
+        delay_transfer_fn(0.0, hubble, 1420.406, [1.0, 2.0], [0.0, 1.0])
+    with pytest.raises(ValueError, match="plateau"):
+        delay_transfer_fn(200e-9, hubble, 1420.406, [1.0, 2.0], [0.0, 1.0],
+                          plateau=0.0)
+    with pytest.raises(TypeError, match="kpar_transfer_fn"):
+        validate_experiment_extensions({"kpar_transfer_fn": [1.0]})

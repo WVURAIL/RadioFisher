@@ -172,6 +172,54 @@ def test_delay_cut_is_evaluated_at_the_bin_redshift():
     assert seen == [z]
 
 
+def _signal_fixture():
+    """A minimal cosmology for Csignal on a two-point (q, y) grid."""
+    experiment = copy.deepcopy(experiments.MID_B1_Octave_Updated)
+    cosmology = {
+        "z": 1.0, "aperp": 1.0, "apar": 1.0, "r": 2000.0, "rnu": 3000.0,
+        "f": 0.8, "D": 0.6, "btot": 1.5, "sigma_nl": 7.0, "A": 1.0,
+        "Tb": 0.1, "fbao": lambda k: 0.0 * k, "pk_nobao": lambda k: 1e4 / k,
+    }
+    q = np.array([100.0, 100.0])
+    y = np.array([0.03, 0.07]) * 3000.0   # kpar = 0.03, 0.07
+    return experiment, cosmology, q, y
+
+
+def test_signal_transfer_scales_only_the_signal_where_asked():
+    experiment, cosmology, q, y = _signal_fixture()
+    bare = baofisher.Csignal(q, y, cosmology, experiment)
+    seen = []
+
+    def transfer(kpar, z):
+        seen.append((np.array(kpar), z))
+        return np.where(kpar < 0.05, 0.25, 1.0)
+
+    experiment["kpar_transfer_fn"] = transfer
+    soft = baofisher.Csignal(q, y, cosmology, experiment)
+
+    assert soft[0] == pytest.approx(0.25 * bare[0])
+    assert soft[1] == pytest.approx(bare[1])
+    assert seen[0][1] == 1.0
+    assert seen[0][0] == pytest.approx([0.03, 0.07])
+    # noise is untouched by a signal transfer
+    experiment["dnutot"] = 10.0
+    cosmology["ns"] = 0.96
+    with_transfer = baofisher.Cnoise(q, y, cosmology, experiment)
+    del experiment["kpar_transfer_fn"]
+    assert np.array_equal(baofisher.Cnoise(q, y, cosmology, experiment),
+                          with_transfer)
+
+
+def test_signal_transfer_rejects_out_of_range_or_misshapen_values():
+    experiment, cosmology, q, y = _signal_fixture()
+    experiment["kpar_transfer_fn"] = lambda kpar, z: 1.5 * np.ones_like(kpar)
+    with pytest.raises(ValueError, match=r"\[0, 1\]"):
+        baofisher.Csignal(q, y, cosmology, experiment)
+    experiment["kpar_transfer_fn"] = lambda kpar, z: np.ones(3)
+    with pytest.raises(ValueError, match="shape"):
+        baofisher.Csignal(q, y, cosmology, experiment)
+
+
 def test_fully_excised_frequency_band_returns_infinite_noise_sentinel():
     experiment = copy.deepcopy(experiments.MID_B1_Octave_Updated)
     experiment["dnutot"] = 10.0

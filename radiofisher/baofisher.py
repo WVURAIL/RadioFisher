@@ -41,6 +41,7 @@ from .extensions import (
     frequency_noise_penalty,
     validate_experiment_extensions,
     validate_kpar_min,
+    validate_kpar_transfer,
     validate_volume_fraction,
 )
 
@@ -1850,7 +1851,18 @@ def Csignal(q, y, cosmo, expt):
     # Construct signal covariance and return
     cs = Frsd * (1. + c['A'] * c['fbao'](k)) * D**2. * c['pk_nobao'](k)
     cs *= c['aperp']**2. * c['apar']
-    return cs * c['Tb']**2. / (c['r']**2. * c['rnu'])
+    cs = cs * c['Tb']**2. / (c['r']**2. * c['rnu'])
+
+    # Soft delay-filter transfer on the signal (the hard cut is the
+    # kpar_min_fn hook in Cnoise). expt['kpar_transfer_fn']: callable
+    # (|k_par| [Mpc^-1], z) -> surviving signal-power fraction in [0, 1];
+    # extensions.delay_transfer_fn builds it from a measured filter
+    # response. Evaluated at the fiducial k_par, like the other cuts, so
+    # its own alpha dependence is not differentiated.
+    if 'kpar_transfer_fn' in list(expt.keys()):
+        cs = cs * validate_kpar_transfer(
+            expt['kpar_transfer_fn'](np.abs(kpar), c['z']), np.shape(kpar))
+    return cs
 
 
 def Cfg(q, y, cosmo, expt):
