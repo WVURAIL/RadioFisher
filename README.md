@@ -46,8 +46,14 @@ capabilities = radiofisher.get_backend_capabilities()
 The capability set is immutable. Backend API version 1 supports explicit
 physical densities, named astrophysical-model profiles,
 frequency-dependent noise weights in `invvar` or `fourier` mode, a surviving
-survey-volume fraction, and the `P_res` additive-bias response. Extension
-values are validated and malformed inputs fail closed.
+survey-volume fraction, the `P_res` additive-bias response, a hard
+line-of-sight cut `kpar_min_fn` (callable of redshift, Mpc^-1) applied in
+the noise beside the foreground and non-linear cuts, and a soft signal
+transfer `kpar_transfer_fn` (callable of `|k_par|` and redshift, in
+`[0, 1]`). `delay_cut_kpar_min` and `delay_transfer_fn` build those two
+from a delay-filter setting through `nu_line` and `H(z)`; they carry no
+instrument-specific numbers, which belong to the client that sets the
+hook. Extension values are validated and malformed inputs fail closed.
 
 The package release is 1.0.0, while the backend API remains version 1 because
 these integration semantics did not change during the cleanup.
