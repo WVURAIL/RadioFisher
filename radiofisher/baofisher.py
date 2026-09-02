@@ -40,6 +40,7 @@ from .extensions import (
     NOISE_FREQUENCY_SAMPLES,
     frequency_noise_penalty,
     validate_experiment_extensions,
+    validate_kpar_min,
     validate_volume_fraction,
 )
 
@@ -1772,6 +1773,24 @@ def Cnoise(q, y, cosmo, expt, cv=False):
     kfg = 2.*np.pi * expt['nu_line'] / (expt['survey_dnutot'] * c['rnu'])
     kfg *= expt['kfg_fac'] if 'kfg_fac' in list(expt.keys()) else 1.
     noise[np.where(np.abs(kpar) < kfg)] = INF_NOISE
+
+    # Delay-domain (line-of-sight) cut from a high-pass foreground filter.
+    #
+    # expt['kpar_min_fn']: vectorised-free callable of redshift returning the
+    #   smallest retained |k_par| in Mpc^-1. A DAYENU-style filter at delay
+    #   tau_cut, together with the mask over its transition zone, deletes
+    #   every line-of-sight mode below
+    #     k_par,min(z) = f_trans * tau_cut * 2 pi nu_21 H(z) / (c (1+z)^2)
+    #   (extensions.delay_cut_kpar_min builds the callable; f_trans = 1.4 is
+    #   CHIME's 200 ns cut / 280 ns mask). This is the same kind of hard
+    #   k-space excision as the foreground cut above, expressed as a delay
+    #   rather than as a multiple of the survey's own kfg, so that a cut set
+    #   by the instrument's chromaticity does not have to be re-derived from
+    #   the survey bandwidth every time the band changes.
+    if 'kpar_min_fn' in list(expt.keys()):
+        kpar_min = validate_kpar_min(expt['kpar_min_fn'](c['z']))
+        if kpar_min > 0.:
+            noise[np.where(np.abs(kpar) < kpar_min)] = INF_NOISE
 
     # Cut out foreground wedge for interferometers (wedge definition taken
     # from Eqs. 5/6 of arXiv:1502.07596). Wedge region is where c*tau <= |b|.

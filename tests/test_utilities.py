@@ -104,6 +104,74 @@ def test_hybrid_noise_path_uses_second_system_temperature():
     assert np.all(np.isfinite(noise))
 
 
+def test_delay_cut_removes_only_modes_below_kpar_min():
+    """expt['kpar_min_fn'] excises low-delay modes exactly like the
+    foreground cut: infinite noise below the threshold, untouched above."""
+    experiment = copy.deepcopy(experiments.MID_B1_Octave_Updated)
+    experiment["dnutot"] = 10.0
+    cosmology = {
+        "z": experiment["nu_line"] / 800.0 - 1.0,
+        "aperp": 1.0,
+        "apar": 1.0,
+        "r": 2000.0,
+        "rnu": 3000.0,
+        "ns": 0.96,
+    }
+    # kpar = y / (apar * rnu), so these y values straddle kpar = 0.05.
+    y = np.array([0.03, 0.07]) * 3000.0
+    q = np.array([100.0, 100.0])
+
+    uncut = baofisher.Cnoise(q, y, cosmology, experiment)
+    experiment["kpar_min_fn"] = lambda z: 0.05
+    cut = baofisher.Cnoise(q, y, cosmology, experiment)
+
+    assert np.all(np.isfinite(uncut))
+    assert cut[0] == baofisher.INF_NOISE
+    assert cut[1] == uncut[1]
+
+
+def test_zero_delay_cut_is_a_no_op():
+    experiment = copy.deepcopy(experiments.MID_B1_Octave_Updated)
+    experiment["dnutot"] = 10.0
+    cosmology = {
+        "z": experiment["nu_line"] / 800.0 - 1.0,
+        "aperp": 1.0,
+        "apar": 1.0,
+        "r": 2000.0,
+        "rnu": 3000.0,
+        "ns": 0.96,
+    }
+    y = np.array([0.03, 0.07]) * 3000.0
+    q = np.array([100.0, 100.0])
+
+    uncut = baofisher.Cnoise(q, y, cosmology, experiment)
+    experiment["kpar_min_fn"] = lambda z: 0.0
+
+    assert np.array_equal(
+        baofisher.Cnoise(q, y, cosmology, experiment), uncut)
+
+
+def test_delay_cut_is_evaluated_at_the_bin_redshift():
+    experiment = copy.deepcopy(experiments.MID_B1_Octave_Updated)
+    experiment["dnutot"] = 10.0
+    z = experiment["nu_line"] / 800.0 - 1.0
+    cosmology = {
+        "z": z, "aperp": 1.0, "apar": 1.0,
+        "r": 2000.0, "rnu": 3000.0, "ns": 0.96,
+    }
+    seen = []
+
+    def kpar_min_fn(redshift):
+        seen.append(redshift)
+        return 0.0
+
+    experiment["kpar_min_fn"] = kpar_min_fn
+    baofisher.Cnoise(np.array([100.0]), np.array([100.0]), cosmology,
+                     experiment)
+
+    assert seen == [z]
+
+
 def test_fully_excised_frequency_band_returns_infinite_noise_sentinel():
     experiment = copy.deepcopy(experiments.MID_B1_Octave_Updated)
     experiment["dnutot"] = 10.0

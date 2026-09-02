@@ -14,6 +14,7 @@ def test_backend_capability_contract_is_immutable():
         "P_res",
         "astrophysical_model_profiles",
         "explicit_physical_densities",
+        "kpar_min_fn",
         "noise_freq_mode",
         "noise_freq_weight",
         "vol_frac",

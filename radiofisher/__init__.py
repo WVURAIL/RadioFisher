@@ -19,10 +19,13 @@ from .astrophysics import (
 )
 from .extensions import (
     DEFAULT_NOISE_FREQ_MODE,
+    DELAY_TRANSITION_FACTOR,
     NOISE_FREQUENCY_SAMPLES,
     NOISE_FREQ_MODES,
+    delay_cut_kpar_min,
     frequency_noise_penalty,
     validate_experiment_extensions,
+    validate_kpar_min,
     validate_volume_fraction,
 )
 from .resources import (
@@ -95,10 +98,13 @@ __all__ = [
     "validate_astrophysical_model",
     "with_astrophysical_profile",
     "DEFAULT_NOISE_FREQ_MODE",
+    "DELAY_TRANSITION_FACTOR",
     "NOISE_FREQUENCY_SAMPLES",
     "NOISE_FREQ_MODES",
+    "delay_cut_kpar_min",
     "frequency_noise_penalty",
     "validate_experiment_extensions",
+    "validate_kpar_min",
     "validate_volume_fraction",
     "UnavailableExperimentData",
     "UnsupportedExperimentDataError",
