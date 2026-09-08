@@ -2057,24 +2057,24 @@ def eos_fisher_matrix_derivs(cosmo, cosmo_fns, fsigma8=False):
     Pre-calculate derivatives required to transform (f, aperp, apar) into dark 
     energy parameters (Omega_k, Omega_DE, w0, wa, h, gamma).
     
-    Returns interpolation functions for d(f,a_perp,par)/d(DE params) as fn. of a.
+    Columns are (Omega_k, Omega_DE, w0, wa, h, gamma, sigma_8), with
+    Omega_m = 1 - Omega_k - Omega_DE and a constant growth index gamma.
+    aperp = D_M(fid)/D_M and apar = H/H(fid). Returns functions of a.
+    cosmo_fns is retained for compatibility; backgrounds are evaluated on
+    the integration grid to avoid extrapolating the supplied splines.
     """
     w0 = cosmo['w0']; wa = cosmo['wa']
     om = cosmo['omega_M_0']; ol = cosmo['omega_lambda_0']
     ok = 1. - om - ol
     
     # Omega_DE(a) and E(a) functions
-    omegaDE = lambda a: ol * np.exp(3.*wa*(a - 1.)) / a**(3.*(1. + w0 + wa))
+    de_shape = lambda a: np.exp(3.*wa*(a - 1.)) / a**(3.*(1. + w0 + wa))
+    omegaDE = lambda a: ol * de_shape(a)
     E = lambda a: np.sqrt( om * a**(-3.) + ok * a**(-2.) + omegaDE(a) )
     
     # Derivatives of E(z) w.r.t. parameters
-    #dE_omegaM = lambda a: 0.5 * a**(-3.) / E(a)
-    if np.abs(ok) < 1e-7: # Effectively zero
-        dE_omegak = lambda a: 0.5 * a**(-2.) / E(a)
-    else:
-        dE_omegak = lambda a: 0.5 * a**(-2.) / E(a) * (1. - 1./a)
-    dE_omegaM = lambda a: 0.5 * a**(-3.) / E(a)
-    dE_omegaDE = lambda a: 0.5 / E(a) * (1. - 1./a**3.)
+    dE_omegak = lambda a: 0.5 * (a**(-2.) - a**(-3.)) / E(a)
+    dE_omegaDE = lambda a: 0.5 * (de_shape(a) - a**(-3.)) / E(a)
     dE_w0 = lambda a: -1.5 * omegaDE(a) * np.log(a) / E(a)
     dE_wa = lambda a: -1.5 * omegaDE(a) * (np.log(a) + 1. - a) / E(a)
     
@@ -2082,55 +2082,56 @@ def eos_fisher_matrix_derivs(cosmo, cosmo_fns, fsigma8=False):
     fns = [dE_omegak, dE_omegaDE, dE_w0, dE_wa]
     
     # Set sampling of scale factor, and precompute some values
-    HH, rr, DD, ff = cosmo_fns
-    aa = np.linspace(1., 1e-4, 500)
-    zz = 1./aa - 1.
-    EE = E(aa); fz = ff(aa)
-    gamma = cosmo['gamma']; H0 = 100. * cosmo['h']; h = cosmo['h']
+    aa = np.geomspace(1., 1e-4, 4097)
+    EE = E(aa)
+    gamma = cosmo['gamma']; h = cosmo['h']
+    Oma = om * aa**(-3.) / EE**2.
+    fz = Oma**gamma
+    integral = lambda y: scipy.integrate.cumtrapz(y, aa, initial=0.)
     
     # Derivatives of apar w.r.t. parameters
     derivs_apar = [f(aa)/EE for f in fns]
     
-    if not fsigma8:
-        # Derivatives of f(z) w.r.t. parameters
-        f_fac = -gamma * fz / EE
-        df_domegak  = f_fac * (EE/om + dE_omegak(aa))
-        df_domegaDE = f_fac * (EE/om + dE_omegaDE(aa))
-        df_w0 = f_fac * dE_w0(aa)
-        df_wa = f_fac * dE_wa(aa)
-        df_dh = np.zeros(aa.shape)
-        df_dgamma = fz * np.log(omegaM_z(zz, cosmo))
-        df_dsig8 = np.zeros(aa.shape)
-        derivs_f = [df_domegak, df_domegaDE, df_w0, df_wa, df_dh, df_dgamma, df_dsig8]
+    # f = (Omega_m*a^-3/E^2)^gamma, including density closure.
+    f_fac = -gamma * fz / EE
+    df_domegak  = f_fac * (EE/om + 2.*dE_omegak(aa))
+    df_domegaDE = f_fac * (EE/om + 2.*dE_omegaDE(aa))
+    df_w0 = 2.*f_fac * dE_w0(aa)
+    df_wa = 2.*f_fac * dE_wa(aa)
+    df_dh = np.zeros(aa.shape)
+    df_dgamma = fz * np.log(Oma)
+    df_dsig8 = np.zeros(aa.shape)
+    derivs_f = [df_domegak, df_domegaDE, df_w0, df_wa, df_dh, df_dgamma, df_dsig8]
+    if fsigma8:
+        # D(1)=1 and d log D/dp = integral[(df/dp)/a] da.
+        D = np.exp(scipy.integrate.cumtrapz(fz, np.log(aa), initial=0.))
+        derivs_f = [cosmo['sigma_8']*D*(df + fz*integral(df/aa))
+                    for df in derivs_f]
+        derivs_f[-1] = fz*D
+
+    # D_M = (c/H0)*S(chi, Omega_k), including the geometric curvature term.
+    chi = -integral(1./(aa**2. * EE))
+    if np.abs(ok) < 1e-7:
+        # Continuous flat limit, without cancellation in dS/dOmega_k.
+        S = chi + ok*chi**3/6. + ok**2*chi**5/120.
+        dS_dchi = 1. + ok*chi**2/2. + ok**2*chi**4/24.
+        dS_dok = chi**3/6. + ok*chi**5/60.
+    elif ok > 0.:
+        t = np.sqrt(ok)*chi
+        S = np.sinh(t)/np.sqrt(ok)
+        dS_dchi = np.cosh(t)
+        dS_dok = (t*np.cosh(t)-np.sinh(t))/(2.*ok**1.5)
     else:
-        # params are actually: omegak, omegaDE, w0, wa, h, sigma_8
-        params = ['omega_M_0', 'omega_lambda_0', 'w0', 'wa', 'h', 'gamma', 'sigma_8']
-        dx = [1e-3, 1e-3, 1e-2, 1e-2, 1e-3, 1e-3, 1e-3]
-        derivs_f = fsigma8_derivs(zz, cosmo, params=params, dx=dx)
-    
-    # Calculate comoving distance (including curvature)
-    r_c = scipy.integrate.cumtrapz(1./(aa**2. * EE), aa)
-    r_c = np.concatenate(([0.], r_c))
-    if ok > 0.:
-        r = C/(H0*np.sqrt(ok)) * np.sinh(r_c * np.sqrt(ok))
-    elif ok < 0.:
-        r = C/(H0*np.sqrt(-ok)) * np.sin(r_c * np.sqrt(-ok))
-    else:
-        r = C/H0 * r_c
-    
-    # Perform integrals needed to calculate derivs. of aperp
-    derivs_aperp = [(C/H0)/r[1:] * scipy.integrate.cumtrapz(f(aa)/(aa * EE)**2., aa) 
-                        for f in fns]
-    
-    # Add additional term to curvature integral (idx 1)
-    # N.B. I think Pedro's result is wrong (for fiducial Omega_k=0 at least), 
-    # so I'm commenting it out
-    #derivs_aperp[1] -= (H0 * r[1:] / C)**2. / 6.
-    
-    # Add initial values (to deal with 1/(r=0) at origin)
-    inivals = [0.5, 0.0, 0., 0.]
-    derivs_aperp = [ np.concatenate(([inivals[i]], derivs_aperp[i])) 
-                     for i in range(len(derivs_aperp)) ]
+        t = np.sqrt(-ok)*chi
+        S = np.sin(t)/np.sqrt(-ok)
+        dS_dchi = np.cos(t)
+        dS_dok = (np.sin(t)-t*np.cos(t))/(2.*(-ok)**1.5)
+    derivs_aperp = []
+    for i, fn in enumerate(fns):
+        dS = dS_dchi*integral(fn(aa)/(aa*EE)**2.)
+        if i == 0:
+            dS += dS_dok
+        derivs_aperp.append(-np.divide(dS, S, out=np.zeros_like(S), where=S != 0.))
     
     # Add (h, gamma, sigma_8) derivs to aperp,apar
     derivs_aperp += [np.ones(aa.shape)/h, np.zeros(aa.shape), np.zeros(aa.shape)]
