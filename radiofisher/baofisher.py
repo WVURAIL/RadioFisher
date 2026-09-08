@@ -1996,7 +1996,7 @@ def fisher_integrands( kgrid, ugrid, cosmo, expt, massive_nu_fn=None,
     # Make list of (non-optional) derivatives
     deriv_list = [ deriv_A, deriv_bHI, deriv_Tb, deriv_sig2, deriv_sigma8, 
                    deriv_ns, deriv_f, deriv_aperp, deriv_apar, 
-                   deriv_bsig8, deriv_fsig8 ]
+                   deriv_fsig8, deriv_bsig8 ]
     paramnames = ['A', 'b_HI', 'Tb', 'sigma_NL', 'sigma8tot', 'n_s', 'f', 
                   'aperp', 'apar', 'fs8', 'bs8']
     
