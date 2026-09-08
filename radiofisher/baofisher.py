@@ -1950,6 +1950,8 @@ def fisher_integrands( kgrid, ugrid, cosmo, expt, massive_nu_fn=None,
     
     # Evaluate derivatives for (apar, aperp) parameters
     dlogpk_dk = logpk_derivative(c['pk_nobao'], k) # Numerical deriv.
+    # P(k) = P_nobao(k) * (1 + A*fbao(k)); include both logarithmic slopes.
+    dlogpk_dk += c['A'] * c['dfbao_dk'](k) / (1. + c['A'] * c['fbao'](k))
     daperp_u2 = -2. * (rnu/r * q/y * aperp/apar * u2)**2. / aperp
     dapar_u2 =   2. * (rnu/r * q/y * aperp/apar * u2)**2. / apar
     daperp_k = (aperp*q/r)**2. / (k*aperp)
