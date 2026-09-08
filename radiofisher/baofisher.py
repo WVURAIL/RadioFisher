@@ -1806,11 +1806,11 @@ def Cnoise(q, y, cosmo, expt, cv=False):
     if 'wedge' in list(expt.keys()):
         if expt['wedge'] == 'horizon':
             # Primary beam wedge
-            noise[np.where(y <= (1.+c['z'])*q)] = INF_NOISE
+            noise[np.where(np.abs(y) <= (1.+c['z'])*np.abs(q))] = INF_NOISE
         elif expt['wedge'] == '3pb':
             # 3x primary beam wedge
             fwhm_fac = np.sin(3. * 0.5 * 1.22 * l / expt['Ddish'])
-            noise[np.where(y <= (1.+c['z'])*q*fwhm_fac)] = INF_NOISE
+            noise[np.where(np.abs(y) <= (1.+c['z'])*np.abs(q)*fwhm_fac)] = INF_NOISE
         else:
             # No wedge
             if expt['wedge'] == True:
@@ -1839,8 +1839,10 @@ def Csignal(q, y, cosmo, expt):
     c = cosmo
 
     # Wavenumber and mu = cos(theta)
-    kperp = q / (c['aperp']*c['r'])
-    kpar = y / (c['apar']*c['rnu'])
+    # aperp = D_M(fid)/D_M, apar = H/H(fid), consistent with the
+    # volume Jacobian below and with fisher_integrands.
+    kperp = c['aperp'] * q / c['r']
+    kpar = c['apar'] * y / c['rnu']
     k = np.sqrt(kpar**2. + kperp**2.)
     u2 = (kpar / k)**2.
 
@@ -1869,7 +1871,7 @@ def Csignal(q, y, cosmo, expt):
     # its own alpha dependence is not differentiated.
     if 'kpar_transfer_fn' in list(expt.keys()):
         cs = cs * validate_kpar_transfer(
-            expt['kpar_transfer_fn'](np.abs(kpar), c['z']), np.shape(kpar))
+            expt['kpar_transfer_fn'](np.abs(y/c['rnu']), c['z']), np.shape(kpar))
     return cs
 
 
@@ -1971,7 +1973,8 @@ def n_IM(kgrid, ugrid, cosmo, expt, zmin=None, zmax=None, cosmo_fns=None):
 
 def fisher_integrands( kgrid, ugrid, cosmo, expt, massive_nu_fn=None,
                        Neff_fn=None, transfer_fn=None, cv_limited=False,
-                       switches=[], galaxy_survey=False, cs_galaxy=None ):
+                       switches=[], galaxy_survey=False, cs_galaxy=None,
+                       rsd_function=None ):
     """
     Return integrands over (k, u) for the Fisher matrix, for all parameters.
     Order: ( A, bHI, Tb, sig2, sigma8, ns, f, aperp, apar, [Mnu], [fNL], [b_1],
@@ -2062,19 +2065,25 @@ def fisher_integrands( kgrid, ugrid, cosmo, expt, massive_nu_fn=None,
 
     # Calculate derivatives of the RSD function we are using
     # (Ignores scale-dep. of bias in drsd_sk; that's included later)
-    if RSD_FUNCTION == 'kaiser':
+    if (RSD_FUNCTION if rsd_function is None else rsd_function) == 'kaiser':
         drsd_df = 2. * u2 / (b + f*u2)
         drsd_dfsig8 = 2. * u2 * Dinv / (b*c['sigma_8'] + f*c['sigma_8']*u2)
         drsd_dsig2 = -k**2. * u2
         drsd_du2 = 2.*f / (b + f*u2) - (k * c['sigma_nl'])**2.
         drsd_dk = -2. * k * u2 * c['sigma_nl']**2.
     else:
-        drsd_df = u2 * ( 2. * u2 / (b + f*u2) \
+        drsd_df = u2 * ( 2. / (b + f*u2) \
                        - (1. + f) * (k*c['sigma_nl']*D)**2. )
+        drsd_dfsig8 = drsd_df * Dinv / c['sigma_8']
         drsd_dsig2 = -0.5 * (k * D)**2. * ( 1. - u2 + u2*(1. + f)**2. )
         drsd_du2 = 2. * f / (b + f*u2) \
                  - 0.5 * (k*c['sigma_nl']*D)**2. * ((1. + f)**2. - 1.)
         drsd_dk = -k*(D*c['sigma_nl'])**2. * (1. - u2 + u2*(1. + f)**2.)
+
+    if galaxy_survey and 'sigma_z0' in expt:
+        sigma_r = expt['sigma_z0'] * rnu / (1. + c['z'])
+        drsd_dk -= 2. * k * u2 * sigma_r**2
+        drsd_du2 -= k**2 * sigma_r**2
 
     # Evaluate derivatives for non-Gaussian bias
     if transfer_fn is not None:
@@ -2200,6 +2209,7 @@ def fisher_integrands( kgrid, ugrid, cosmo, expt, massive_nu_fn=None,
 
     # Evaluate derivatives for (apar, aperp) parameters
     dlogpk_dk = logpk_derivative(c['pk_nobao'], k) # Numerical deriv.
+    dlogbao_dk = c['A'] * c['dfbao_dk'](k) / (1. + c['A'] * c['fbao'](k))
     # Algebraically equivalent to (q/y * ... * u2)**2, but finite at
     # transverse modes (y=0). Odd-sized mu grids include that endpoint.
     angular_factor = 2. * u2 * (1. - u2)
@@ -2211,9 +2221,9 @@ def fisher_integrands( kgrid, ugrid, cosmo, expt, massive_nu_fn=None,
     # Construct alpha derivatives
     if use['alpha_all']:
         deriv_aperp = ( (2./aperp) + drsd_du2 * daperp_u2 \
-                       + (dlogpk_dk + drsd_dk + dbias_k)*daperp_k ) * cs / ctot
+                       + (dlogpk_dk + dlogbao_dk + drsd_dk + dbias_k)*daperp_k ) * cs / ctot
         deriv_apar =  ( (1./apar)  + drsd_du2 * dapar_u2 \
-                       + (dlogpk_dk + drsd_dk + dbias_k)*dapar_k  ) * cs / ctot
+                       + (dlogpk_dk + dlogbao_dk + drsd_dk + dbias_k)*dapar_k  ) * cs / ctot
     else:
         # Split-out alpha terms so that they can be switched on and off
         dfbao_dk = c['dfbao_dk'](k)
@@ -2227,7 +2237,7 @@ def fisher_integrands( kgrid, ugrid, cosmo, expt, massive_nu_fn=None,
         t_term[1] = drsd_du2 * daperp_u2
         t_term[2] = drsd_dk * daperp_k
         t_term[3] = c['A'] * dfbao_dk / (1. + c['A'] * c['fbao'](k)) * daperp_k
-        t_term[4] = (dlogpk_dk * daperp_k) - t_term[3]
+        t_term[4] = dlogpk_dk * daperp_k
         # t_term[3] = dlogpk_dk * daperp_k # Total P(k) shift term
 
         # (r = radial)
@@ -2235,7 +2245,7 @@ def fisher_integrands( kgrid, ugrid, cosmo, expt, massive_nu_fn=None,
         r_term[1] = drsd_du2 * dapar_u2
         r_term[2] = drsd_dk * dapar_k
         r_term[3] = c['A'] * dfbao_dk / (1. + c['A'] * c['fbao'](k)) * dapar_k
-        r_term[4] = (dlogpk_dk * dapar_k) - r_term[3]
+        r_term[4] = dlogpk_dk * dapar_k
         # r_term[3] = dlogpk_dk * dapar_k # Total P(k) shift term
 
         # Sum-up all terms

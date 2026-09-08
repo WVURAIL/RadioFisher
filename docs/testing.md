@@ -54,6 +54,18 @@ Coverage is a regression floor, not a proof of physical completeness.
   distance-matrix input ownership now follow their documented contracts.
 - Error-ellipse axes, triangle-subset handling, and correlation plotting work
   with current Matplotlib and preserve covariance geometry.
+- Positive and negative radial modes receive the same foreground-wedge cut.
+- Signal distance rescaling agrees with its volume Jacobian and derivatives.
+  The all-constraints distance projection includes the BAO shift, and the
+  separately enabled smooth-spectrum term no longer cancels that shift.
+- Alternate RSD growth derivatives are defined and match finite differences.
+  Galaxy forecasts use their own RSD model, total bias, and photometric
+  damping derivatives rather than inheriting the H I RSD switch.
+
+The distance-derivative corrections change all-constraints forecasts,
+including newly computed Bull-profile banks. Historical numerical outputs
+must retain their original source identity. The Foreman BAO-shift-only
+prescription remains a separate explicit configuration.
 
 ## The current cosmology
 

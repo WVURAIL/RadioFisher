@@ -117,3 +117,24 @@ def test_galaxy_binned_spectrum_and_photometric_damping(model):
         fns, kbins=np.array([.005, .03, .1, .3]), return_pk=True)
     assert names[-3:] == ['pk0', 'pk1', 'pk2']
     assert F.shape[0] == len(names) and np.isfinite(F).all() and info['Vsurvey'] > 0
+
+
+def test_galaxy_pipeline_uses_its_own_rsd_model(model, monkeypatch):
+    monkeypatch.setattr(rf, 'RSD_FUNCTION', 'kaiser')
+    monkeypatch.setattr(galaxy, 'RSD_FUNCTION', 'loeb')
+    original = rf.fisher_integrands
+    def checked(k, u, c, expt, **kwargs):
+        derivs, names = original(k, u, c, expt, **kwargs)
+        K, U = np.meshgrid(k, u)
+        q, y = c['r']*K*np.sqrt(1-U**2), c['rnu']*K*U
+        plus, minus = copy.deepcopy(c), copy.deepcopy(c)
+        plus['f'] += 1e-5
+        minus['f'] -= 1e-5
+        expected = (np.log(galaxy.Csignal_galaxy(q, y, plus, expt)+1/c['ngal'])-
+                    np.log(galaxy.Csignal_galaxy(q, y, minus, expt)+1/c['ngal']))/2e-5
+        np.testing.assert_allclose(derivs[names.index('f')], expected, rtol=1e-5, atol=1e-9)
+        return derivs, names
+    monkeypatch.setattr(rf, 'fisher_integrands', checked)
+    c, _, fns = model
+    galaxy.fisher_galaxy_survey(.5, .6, .001, 1.5, c,
+        {'fsky': .2, 'k_nl0': .14, 'use': experiments.USE}, fns)

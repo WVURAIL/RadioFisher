@@ -22,19 +22,20 @@ def Csignal_galaxy(q, y, cosmo, expt):
     c = cosmo
     
     # Wavenumber and mu = cos(theta)
-    kperp = q / (c['aperp']*c['r'])
-    kpar = y / (c['apar']*c['rnu'])
+    kperp = c['aperp'] * q / c['r']
+    kpar = c['apar'] * y / c['rnu']
     k = np.sqrt(kpar**2. + kperp**2.)
     u2 = (kpar / k)**2.
     
     # RSD function (bias 'btot' already includes scale-dep. bias/non-Gaussianity)
+    bias = c.get('btot', c['bgal'])
     if RSD_FUNCTION == 'kaiser':
         # Pedro's notes, Eq. 7
-        Frsd = (c['bgal'] + c['f']*u2)**2. * np.exp(-u2*(k*c['sigma_nl'])**2.)
+        Frsd = (bias + c['f']*u2)**2. * np.exp(-u2*(k*c['sigma_nl'])**2.)
     else:
         # arXiv:0812.0419, Eq. 5
         sigma_nl2_eff = (c['D'] * c['sigma_nl'])**2. * (1. - u2 + u2*(1.+c['f'])**2.)
-        Frsd = (c['bgal'] + c['f']*u2)**2. * np.exp(-0.5 * k**2. * sigma_nl2_eff)
+        Frsd = (bias + c['f']*u2)**2. * np.exp(-0.5 * k**2. * sigma_nl2_eff)
     
     # Photometric redshift error (see e.g. Zhan & Knox 2006)
     if 'sigma_z0' in list(expt.keys()):
@@ -122,7 +123,7 @@ def fisher_galaxy_survey( zmin, zmax, ngal, bias, cosmo, expt, cosmo_fns,
     derivs, paramnames = rf.fisher_integrands( kgrid, ugrid, cosmo, expt=expt, 
                                    massive_nu_fn=massive_nu_fn, transfer_fn=None, 
                                    galaxy_survey=True, cs_galaxy=Csignal_galaxy,
-                                   switches=switches )
+                                   switches=switches, rsd_function=RSD_FUNCTION )
     Vfac = Vsurvey / (8. * np.pi**2.)
     F = Vfac * rf.integrate_fisher_elements(derivs, kgrid, ugrid)
     
