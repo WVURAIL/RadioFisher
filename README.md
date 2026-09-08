@@ -25,6 +25,14 @@ python -m pip install -e '.[test]'
 python -m pytest
 ```
 
+For the component and numerical verification suite, coverage gates, and the
+scope of the independent physics oracles, see [testing](docs/testing.md).
+New forecasts can use `radiofisher.get_cosmology()`, whose default is the
+August 2026 `cmbspa2026` combination. `experiments.cosmo` retains Bull's
+historical Planck 2013 fiducial, and `chime2021/experiments_CHIME.py` retains
+Foreman's CHIME Overview fiducial. These historical inputs remain named
+references for reproduction; they do not select the new forecast default.
+
 NumPy, SciPy, and matplotlib are installed as core dependencies. An external
 CAMB executable is optional: it is needed to generate a new matter-power
 spectrum, but not to load a validated precomputed spectrum.

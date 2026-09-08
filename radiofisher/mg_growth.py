@@ -62,12 +62,12 @@ def growth_k(z, cosmo, kmin=1e-4, kmax=1e2, kref=1e-1, nsamp=100):
     f = []; D = []
     
     # Calculate reference value of D(k=kref, a=1) = 1, for normalisation
-    ff, logD = scipy.integrate.odeint(dfDdloga, [1.,0.], x, args=(kref, cosmo)).T
+    ff, logD = scipy.integrate.odeint(dfDdloga, [1.,0.], x, args=(kref, cosmo), rtol=1e-10, atol=1e-10).T
     logDref = logD[-1]
     
     # Loop through specified k values
     for k in kk:
-        ff, logD = scipy.integrate.odeint(dfDdloga, [1.,0.], x, args=(k, cosmo)).T
+        ff, logD = scipy.integrate.odeint(dfDdloga, [1.,0.], x, args=(k, cosmo), rtol=1e-10, atol=1e-10).T
         f.append(ff[1])
         D.append( np.exp(logD[1] - logDref) )
     
@@ -143,4 +143,10 @@ def growth_param_derivs(zc, k, cosmo,
     Derivatives of f(z)*sigma_8(z) with respect to the modified growth 
     parameters gamma, eta.
     """
+    from .baofisher import fsigma8_derivs
+
+    if len(mg_params) != len(dx) or any(not np.isfinite(d) or d <= 0 for d in dx):
+        raise ValueError("Provide one positive finite step per growth parameter")
+    derivatives = fsigma8_derivs(zc, cosmo, params=mg_params, dx=dx)
+    return [np.full(np.shape(k), float(d)) for d in derivatives]
     

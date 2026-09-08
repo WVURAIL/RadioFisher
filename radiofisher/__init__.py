@@ -78,12 +78,15 @@ from . import experiments
 from . import fisher_galaxy as galaxy
 from . import mg_growth
 from . import read_config
+from .cosmologies import DEFAULT_COSMOLOGY, get_cosmology
 
 __version__ = BACKEND_VERSION
 
 # The package root deliberately exposes only the supported surface below.
 # Implementation-module imports such as ``radiofisher.np`` are not API.
 __all__ = [
+    "DEFAULT_COSMOLOGY",
+    "get_cosmology",
     "__version__",
     "BACKEND_API_VERSION",
     "BACKEND_CAPABILITIES",

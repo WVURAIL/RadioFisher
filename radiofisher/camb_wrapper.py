@@ -125,7 +125,7 @@ def run_camb(params_fname, camb_exec_dir):
 
 def comoving_dist(a, cosmo):
     """
-    Comoving distance. Ignores radiation, which might shift results slightly.
+    Transverse comoving distance, including radiation and CPL dark energy.
     """
     aa = np.logspace(np.log10(a), 0., 1000)
     zz = 1./aa - 1.
@@ -140,11 +140,11 @@ def comoving_dist(a, cosmo):
     ok = 1. - om - ol
     
     # Omega_DE(z) and 1/E(z)
-    omegaDE = ol #* np.exp(3.*wa*(aa - 1.)) / aa**(3.*(1. + w0 + wa))
+    omegaDE = ol * np.exp(3.*wa*(aa - 1.)) / aa**(3.*(1. + w0 + wa))
     invE = 1. / np.sqrt( om*aa + ok*aa**2. + ogam + onu + omegaDE*aa**4.) # 1/(a^2 H)
     
     # Calculate r(z), with curvature-dependent parts
-    r_c = scipy.integrate.simps(invE, aa)
+    r_c = scipy.integrate.simpson(invE, x=aa)
     if ok > 0.:
         _r = C/(H0*np.sqrt(ok)) * np.sinh(r_c * np.sqrt(ok))
     elif ok < 0.:
@@ -186,7 +186,7 @@ def rsound(a, cosmo):
     cs = np.sqrt(3. + 3.*R) # Sound speed
     rs_integ = 1. / np.sqrt( om*aa + ok*aa**2. + ogam + onu + omegaDE*aa**4.) # 1/(a^2 H)
     rs_integ /= cs
-    rs = (C/H0) * scipy.integrate.simps(rs_integ, aa)
+    rs = (C/H0) * scipy.integrate.simpson(rs_integ, x=aa)
     return rs
 
 def cmb_to_theta(cosmo, h):
@@ -196,6 +196,7 @@ def cmb_to_theta(cosmo, h):
     """
     # Recast cosmological parameters into CAMB parameters
     p = {}
+    cosmo = copy.deepcopy(cosmo)
     cosmo['h'] = h
     p['hubble'] = 100.*cosmo['h']
     p['omch2'] = (cosmo['omega_M_0'] - cosmo['omega_b_0']) * cosmo['h']**2.

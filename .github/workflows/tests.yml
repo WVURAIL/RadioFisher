@@ -40,8 +40,10 @@ jobs:
         run: python -m pip install --upgrade pip ".[test]"
       - name: Compile supported Python sources
         run: python -m compileall -q radiofisher tests chime2021/experiments_CHIME.py
-      - name: Run focused tests
-        run: python -m pytest -q
+      - name: Run component and numerical benches
+        run: python -m pytest -q --cov --cov-report=term-missing:skip-covered --cov-report=json
+      - name: Enforce coverage for every module
+        run: python scripts/check_test_coverage.py
       - name: Build wheel
         run: python -m pip wheel --no-deps --wheel-dir dist .
       - name: Verify installed wheel metadata

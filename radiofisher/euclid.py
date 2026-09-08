@@ -103,12 +103,17 @@ def detf_to_rf(fname, cosmo, omegab=False):
     DETF fiducial parameters are taken from the FoMSWG Technical Report (p8).
     """
     # Load DETF Planck Fisher matrix (indexes start from 0)
-    dat = np.genfromtxt(fname).T
-    N = np.max(dat[0]) + 1
+    dat = np.loadtxt(fname, ndmin=2).T
+    if (dat.shape[0] != 3 or not np.isfinite(dat).all()
+            or np.any(dat[:2] < 0) or np.any(dat[:2] != np.floor(dat[:2]))):
+        raise ValueError("DETF data must contain nonnegative integer indices and finite values")
+    N = int(np.max(dat[:2])) + 1
+    if N != 45:
+        raise ValueError("DETF prior requires 45 parameters (including 36 w bins)")
     F = np.zeros((N,N))
     for k in range(dat.shape[1]):
-        i = dat[0,k]
-        j = dat[1,k]
+        i = int(dat[0,k])
+        j = int(dat[1,k])
         F[i,j] = dat[2,k]
     
     # DETF fiducial values (from p8 of arXiv:0901.0721)

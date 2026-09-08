@@ -148,8 +148,8 @@ def plot_ellipse(F, p1, p2, fiducial, names, ax=None):
     a, b, ang, alpha = ellipse_for_fisher_params(p1, p2, F)
 
     # Get 1,2,3-sigma ellipses and plot
-    ellipses = [matplotlib.patches.Ellipse(xy=(x, y), width=alpha[k]*b,
-                 height=alpha[k]*a, angle=ang, fc='none') for k in range(0, 2)]
+    ellipses = [matplotlib.patches.Ellipse(xy=(x, y), width=alpha[k]*a,
+                 height=alpha[k]*b, angle=ang, fc='none') for k in range(0, 2)]
     created_ax = ax is None
     if created_ax:
         ax = P.subplot(111)
@@ -174,7 +174,12 @@ def triangle_plot(fiducial, F, names, priors=None, skip=None):
 
     # Remove unwanted variables (after marginalisation though)
     if skip is not None:
-        Finv = fisher_with_excluded_params(Finv, skip)
+        keep = [i for i in range(N) if i not in skip]
+        Finv, names = fisher_with_excluded_params(Finv, skip, names)
+        fiducial = [fiducial[i] for i in keep]
+        if priors is not None:
+            priors = [priors[i] for i in keep]
+        N = len(keep)
 
     # Loop through elements of matrix, plotting 2D contours or 1D marginals
     for i in range(N):
@@ -188,8 +193,8 @@ def triangle_plot(fiducial, F, names, priors=None, skip=None):
           )
 
           # Get 1,2,3-sigma ellipses and plot
-          ellipses = [matplotlib.patches.Ellipse(xy=(x, y), width=alpha[k]*b,
-                       height=alpha[k]*a, angle=ang, fc='none') for k in range(0, 2)]
+          ellipses = [matplotlib.patches.Ellipse(xy=(x, y), width=alpha[k]*a,
+                       height=alpha[k]*b, angle=ang, fc='none') for k in range(0, 2)]
           ax = P.subplot(N, N, N*j + i + 1)
           for e in ellipses: ax.add_patch(e)
           P.plot(x, y, 'bx')
@@ -251,7 +256,7 @@ def plot_corrmat(F, names):
     ax = fig.add_subplot(111)
 
     #F_corr = F_corr**3.
-    matshow = ax.matshow(F_corr, vmin=-1., vmax=1., cmap=matplotlib.cm.get_cmap("RdBu"))
+    matshow = ax.matshow(F_corr, vmin=-1., vmax=1., cmap='RdBu')
     #ax.title("z = %3.3f" % zc[i])
     fig.colorbar(matshow)
 
@@ -283,6 +288,7 @@ def plot_corrmat(F, names):
     fig.show()
     P.show()
     #P.savefig("corrcoeff-%s-%3.3f.png" % (names[k], zc[i]))
+    return fig
 
 
 ################################################################################
@@ -847,7 +853,7 @@ def omegaM_z(z, cosmo):
     """
     om = cosmo['omega_M_0']; ol = cosmo['omega_lambda_0']
     ok = 1. - om - ol
-    E = np.sqrt(om*(1.+z)**3. + ok*(1.+z)**2. + ol)
+    E = Ez(cosmo, z)
     return om * (1. + z)**3. * E**-2.
 
 def inverse_interpfn(f):
@@ -856,13 +862,8 @@ def inverse_interpfn(f):
     have been produced by interpolation, where some of the elements were
     outside the interpolation range.
     """
-    if f.shape == (): # 0-dimensional case
-        ff = 1. / f
-    else:
-        ff = np.zeros(f.shape)
-        idxs = np.where(f != 0.)
-        ff[idxs] = 1. / f[idxs]
-    return ff
+    values = np.asarray(f, dtype=float)
+    return np.divide(1., values, out=np.zeros_like(values), where=values != 0)
 
 def _nonnegative_finite(value, name):
     """Return a non-negative finite scalar cosmological density."""
@@ -949,6 +950,9 @@ def cached_camb_output(p, cachefile, cosmo=None, mode='matterpower',
     """
     Load P(k) or T(k) from cache, or else use CAMB to recompute it.
     """
+    if mode not in ('matterpower', 'transfer', 'cl', 'cls'):
+        raise ValueError("Unknown CAMB cache mode: %s" % mode)
+    p = copy.deepcopy(p)
     # Create hash of input cosmo parameters
     m = md5()
     keys = list(p.keys())
@@ -965,6 +969,10 @@ def cached_camb_output(p, cachefile, cosmo=None, mode='matterpower',
         f = open(cachefile, 'r')
         header = f.readline()
         f.close()
+        if not header.startswith('#'):
+            if force:
+                raise IOError("Rebuild malformed cache")
+            raise ValueError("CAMB cache is missing its parameter hash")
         hash = header.split("#")[1].strip()
 
         # Compare with input hash; quit if hash doesn't match (unless force=True)
@@ -1001,11 +1009,11 @@ def cached_camb_output(p, cachefile, cosmo=None, mode='matterpower',
     output = camb.run_camb("%s.ini" % fname, camb_exec_dir=CAMB_EXEC)
 
     # Get values of cosmo. params for rescaling CAMB output
-    if cosmo is not None and mode != 'cl':
+    if cosmo is not None and mode not in ('cl', 'cls'):
         h = cosmo['h']
         sigma_8_in = cosmo['sigma_8']
         sigma8 = output['sigma8']
-    elif mode != 'cl':
+    elif mode not in ('cl', 'cls'):
         h = p['hubble'] / 100.
         sigma_8_in = output['sigma8']
         sigma8 = output['sigma8']
@@ -2192,8 +2200,11 @@ def fisher_integrands( kgrid, ugrid, cosmo, expt, massive_nu_fn=None,
 
     # Evaluate derivatives for (apar, aperp) parameters
     dlogpk_dk = logpk_derivative(c['pk_nobao'], k) # Numerical deriv.
-    daperp_u2 = -2. * (rnu/r * q/y * aperp/apar * u2)**2. / aperp
-    dapar_u2 =   2. * (rnu/r * q/y * aperp/apar * u2)**2. / apar
+    # Algebraically equivalent to (q/y * ... * u2)**2, but finite at
+    # transverse modes (y=0). Odd-sized mu grids include that endpoint.
+    angular_factor = 2. * u2 * (1. - u2)
+    daperp_u2 = -angular_factor / aperp
+    dapar_u2 = angular_factor / apar
     daperp_k = (aperp*q/r)**2. / (k*aperp)
     dapar_k  = (apar*y/rnu)**2. / (k*apar)
 
@@ -2238,7 +2249,7 @@ def fisher_integrands( kgrid, ugrid, cosmo, expt, massive_nu_fn=None,
     # Make list of (non-optional) derivatives
     deriv_list = [ deriv_A, deriv_bHI, deriv_Tb, deriv_sig2, deriv_sigma8,
                    deriv_ns, deriv_f, deriv_aperp, deriv_apar,
-                   deriv_bsig8, deriv_fsig8 ]
+                   deriv_fsig8, deriv_bsig8 ]
     paramnames = ['A', 'b_HI', 'Tb', 'sigma_NL', 'sigma8tot', 'n_s', 'f',
                   'aperp', 'apar', 'fs8', 'bs8']
 
@@ -2318,98 +2329,61 @@ def fisher_integrands( kgrid, ugrid, cosmo, expt, massive_nu_fn=None,
 
 
 def eos_fisher_matrix_derivs(cosmo, cosmo_fns, fsigma8=False):
+    """Project (f or f*sigma8, aperp, apar) onto background parameters.
+
+    Columns are (Omega_k, Omega_DE, w0, wa, h, gamma, sigma_8).
+    Omega_m = 1 - Omega_k - Omega_DE; all other columns are held fixed.
+    aperp = D_M(fid)/D_M and apar = H/H(fid). The gamma column uses
+    the constant growth index (overriding gamma0/gamma1), as in the
+    historical projection API. Results are functions of scale factor.
+    Radiation is neglected, consistently with background_evolution_splines.
     """
-    Pre-calculate derivatives required to transform (f, aperp, apar) into dark
-    energy parameters (Omega_k, Omega_DE, w0, wa, h, gamma).
-
-    Returns interpolation functions for d(f,a_perp,par)/d(DE params) as fn. of a.
-    """
-    w0 = cosmo['w0']; wa = cosmo['wa']
-    om = cosmo['omega_M_0']; ol = cosmo['omega_lambda_0']
-    ok = 1. - om - ol
-
-    # Omega_DE(a) and E(a) functions
-    omegaDE = lambda a: ol * np.exp(3.*wa*(a - 1.)) / a**(3.*(1. + w0 + wa))
-    E = lambda a: np.sqrt( om * a**(-3.) + ok * a**(-2.) + omegaDE(a) )
-
-    # Derivatives of E(z) w.r.t. parameters
-    #dE_omegaM = lambda a: 0.5 * a**(-3.) / E(a)
-    if np.abs(ok) < 1e-7: # Effectively zero
-        dE_omegak = lambda a: 0.5 * a**(-2.) / E(a)
-    else:
-        dE_omegak = lambda a: 0.5 * a**(-2.) / E(a) * (1. - 1./a)
-    dE_omegaM = lambda a: 0.5 * a**(-3.) / E(a)
-    dE_omegaDE = lambda a: 0.5 / E(a) * (1. - 1./a**3.)
-    dE_w0 = lambda a: -1.5 * omegaDE(a) * np.log(a) / E(a)
-    dE_wa = lambda a: -1.5 * omegaDE(a) * (np.log(a) + 1. - a) / E(a)
-
-    # Bundle functions into list (for performing repetitive operations with them)
-    fns = [dE_omegak, dE_omegaDE, dE_w0, dE_wa]
-
-    # Set sampling of scale factor, and precompute some values
-    HH, rr, DD, ff = cosmo_fns
-    aa = np.linspace(1., 1e-4, 500)
+    c = copy.deepcopy(cosmo)
+    aa = np.geomspace(1., 1e-4, 4097)
     zz = 1./aa - 1.
-    EE = E(aa); fz = ff(aa)
-    gamma = cosmo['gamma']; H0 = 100. * cosmo['h']; h = cosmo['h']
+    om, ol, h, gamma = (c[key] for key in
+                        ('omega_M_0', 'omega_lambda_0', 'h', 'gamma'))
+    ok = 1. - om - ol
+    de_shape = np.exp(3.*c['wa']*(aa-1.)) / aa**(3.*(1.+c['w0']+c['wa']))
+    de = ol * de_shape
+    E = Ez(c, zz)
+    dE = [0.5*(aa**-2 - aa**-3)/E,
+          0.5*(de_shape - aa**-3)/E,
+          -1.5*de*np.log(aa)/E,
+          -1.5*de*(np.log(aa)+1.-aa)/E]
+    f = fgrowth(c, zz, usegamma=True)
+    df = [-gamma*f*(1./om + 2.*dE[i]/E) for i in range(2)]
+    df += [-2.*gamma*f*d/E for d in dE[2:]]
+    df += [np.zeros_like(aa), f*np.log(om*aa**-3/E**2), np.zeros_like(aa)]
+    integral = lambda y: scipy.integrate.cumulative_trapezoid(y, x=aa, initial=0.)
+    if fsigma8:
+        D = np.exp(scipy.integrate.cumulative_trapezoid(f, x=np.log(aa), initial=0.))
+        df = [c['sigma_8']*D*(d + f*integral(d/aa)) for d in df]
+        df[-1] = f*D
 
-    # Derivatives of apar w.r.t. parameters
-    derivs_apar = [f(aa)/EE for f in fns]
-
-    if not fsigma8:
-        # Derivatives of f(z) w.r.t. parameters
-        f_fac = -gamma * fz / EE
-        df_domegak  = f_fac * (EE/om + dE_omegak(aa))
-        df_domegaDE = f_fac * (EE/om + dE_omegaDE(aa))
-        df_w0 = f_fac * dE_w0(aa)
-        df_wa = f_fac * dE_wa(aa)
-        df_dh = np.zeros(aa.shape)
-        df_dgamma = fz * np.log(omegaM_z(zz, cosmo))
-        df_dsig8 = np.zeros(aa.shape)
-        derivs_f = [df_domegak, df_domegaDE, df_w0, df_wa, df_dh, df_dgamma, df_dsig8]
+    chi = -integral(1./(aa**2*E))
+    if abs(ok) < 1e-7:
+        # Continuous series at flatness avoids cancellation in dS/dOmega_k.
+        S = chi + ok*chi**3/6. + ok**2*chi**5/120.
+        Sp = 1. + ok*chi**2/2. + ok**2*chi**4/24.
+        Sk = chi**3/6. + ok*chi**5/60.
+    elif ok > 0:
+        t = np.sqrt(ok)*chi
+        S, Sp = np.sinh(t)/np.sqrt(ok), np.cosh(t)
+        Sk = (t*np.cosh(t)-np.sinh(t))/(2.*ok**1.5)
     else:
-        # params are actually: omegak, omegaDE, w0, wa, h, sigma_8
-        params = ['omega_M_0', 'omega_lambda_0', 'w0', 'wa', 'h', 'gamma', 'sigma_8']
-        dx = [1e-3, 1e-3, 1e-2, 1e-2, 1e-3, 1e-3, 1e-3]
-        derivs_f = fsigma8_derivs(zz, cosmo, params=params, dx=dx)
-
-    # Calculate comoving distance (including curvature)
-    r_c = scipy.integrate.cumulative_trapezoid(1./(aa**2. * EE), x=aa)
-    r_c = np.concatenate(([0.], r_c))
-    if ok > 0.:
-        r = C/(H0*np.sqrt(ok)) * np.sinh(r_c * np.sqrt(ok))
-    elif ok < 0.:
-        r = C/(H0*np.sqrt(-ok)) * np.sin(r_c * np.sqrt(-ok))
-    else:
-        r = C/H0 * r_c
-
-    # Perform integrals needed to calculate derivs. of aperp
-    derivs_aperp = [(C/H0)/r[1:] * scipy.integrate.cumulative_trapezoid(f(aa)/(aa * EE)**2., x=aa)
-                        for f in fns]
-
-    # Add additional term to curvature integral (idx 1)
-    # N.B. I think Pedro's result is wrong (for fiducial Omega_k=0 at least),
-    # so I'm commenting it out
-    #derivs_aperp[1] -= (H0 * r[1:] / C)**2. / 6.
-
-    # Add initial values (to deal with 1/(r=0) at origin)
-    inivals = [0.5, 0.0, 0., 0.]
-    derivs_aperp = [ np.concatenate(([inivals[i]], derivs_aperp[i]))
-                     for i in range(len(derivs_aperp)) ]
-
-    # Add (h, gamma, sigma_8) derivs to aperp,apar
-    derivs_aperp += [np.ones(aa.shape)/h, np.zeros(aa.shape), np.zeros(aa.shape)]
-    derivs_apar  += [np.ones(aa.shape)/h, np.zeros(aa.shape), np.zeros(aa.shape)]
-
-    # Construct interpolation functions
-    interp_f     = [scipy.interpolate.interp1d(aa[::-1], d[::-1],
-                    kind='linear', bounds_error=False) for d in derivs_f]
-    interp_apar  = [scipy.interpolate.interp1d(aa[::-1], d[::-1],
-                    kind='linear', bounds_error=False) for d in derivs_apar]
-    interp_aperp = [scipy.interpolate.interp1d(aa[::-1], d[::-1],
-                    kind='linear', bounds_error=False) for d in derivs_aperp]
-    return [interp_f, interp_aperp, interp_apar]
-
+        t = np.sqrt(-ok)*chi
+        S, Sp = np.sin(t)/np.sqrt(-ok), np.cos(t)
+        Sk = (np.sin(t)-t*np.cos(t))/(2.*(-ok)**1.5)
+    dperp = []
+    for i, d in enumerate(dE):
+        dS = Sp*integral(d/(aa**2*E**2)) + (Sk if i == 0 else 0.)
+        dperp.append(-np.divide(dS, S, out=np.zeros_like(S), where=S != 0.))
+    dpar = [d/E for d in dE]
+    for group in (dperp, dpar):
+        group.extend([np.ones_like(aa)/h, np.zeros_like(aa), np.zeros_like(aa)])
+    return [[scipy.interpolate.interp1d(aa[::-1], d[::-1], bounds_error=False)
+             for d in group] for group in (df, dperp, dpar)]
 
 def indexes_for_sampled_fns(p, Nbins, zfns):
     """
@@ -2680,6 +2654,7 @@ def transform_to_lss_distances(z, F, paramnames, cosmo_fns=None, DA=None, H=None
     S[ih,iff] = 2.*H / (3.*FF)  # d H / d F
 
     # Rescale Fisher matrix for DA, H
+    F = np.array(F, dtype=float, copy=True)
     F[ida,:] /= rescale_da; F[:,ida] /= rescale_da
     F[ih,:] /= rescale_h; F[:,ih] /= rescale_h
 
