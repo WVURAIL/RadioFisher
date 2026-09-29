@@ -18,8 +18,13 @@ def signal_model():
 
 @pytest.mark.parametrize('model', ['kaiser', 'loeb'])
 @pytest.mark.parametrize('is_galaxy', [False, True])
-def test_named_derivatives_match_covariance_finite_differences(signal_model, monkeypatch, model, is_galaxy):
+@pytest.mark.parametrize('growth_bias', [(.8, 2., .6, .834), (.95, 1.3, .4, .812)])
+@pytest.mark.parametrize('step', [1e-5, 5e-6])
+def test_named_derivatives_match_covariance_finite_differences(
+        signal_model, monkeypatch, model, is_galaxy, growth_bias, step):
     c, e = signal_model
+    growth, bias, D, sigma8 = growth_bias
+    c.update(f=growth, bHI=bias, bgal=bias, btot=bias, D=D, sigma_8=sigma8)
     monkeypatch.setattr(rf, 'RSD_FUNCTION', model)
     monkeypatch.setattr(galaxy, 'RSD_FUNCTION', model)
     if is_galaxy:
@@ -33,7 +38,6 @@ def test_named_derivatives_match_covariance_finite_differences(signal_model, mon
     noise = 1/c['ngal'] if is_galaxy else rf.Cnoise(q, y, c, e)+rf.Cfg(q, y, c, e)
     for name, key in [('f', 'f'), ('fs8', 'f'), ('bs8', 'bHI'), ('aperp', 'aperp'), ('apar', 'apar')]:
         plus, minus = copy.deepcopy(c), copy.deepcopy(c)
-        step = 1e-5
         delta = step/(c['D']*c['sigma_8']) if name in ('fs8', 'bs8') else step
         plus[key] += delta
         minus[key] -= delta
