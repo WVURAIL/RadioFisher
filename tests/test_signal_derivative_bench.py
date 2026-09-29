@@ -18,8 +18,13 @@ def signal_model():
 
 @pytest.mark.parametrize('model', ['kaiser', 'loeb'])
 @pytest.mark.parametrize('is_galaxy', [False, True])
-def test_named_derivatives_match_covariance_finite_differences(signal_model, monkeypatch, model, is_galaxy):
+@pytest.mark.parametrize('growth_bias', [(.8, 2., .6, .834), (.95, 1.3, .4, .812)])
+@pytest.mark.parametrize('step', [1e-5, 5e-6])
+def test_named_derivatives_match_covariance_finite_differences(
+        signal_model, monkeypatch, model, is_galaxy, growth_bias, step):
     c, e = signal_model
+    growth, bias, D, sigma8 = growth_bias
+    c.update(f=growth, bHI=bias, bgal=bias, btot=bias, D=D, sigma_8=sigma8)
     monkeypatch.setattr(rf, 'RSD_FUNCTION', model)
     monkeypatch.setattr(galaxy, 'RSD_FUNCTION', model)
     if is_galaxy:
@@ -33,7 +38,6 @@ def test_named_derivatives_match_covariance_finite_differences(signal_model, mon
     noise = 1/c['ngal'] if is_galaxy else rf.Cnoise(q, y, c, e)+rf.Cfg(q, y, c, e)
     for name, key in [('f', 'f'), ('fs8', 'f'), ('bs8', 'bHI'), ('aperp', 'aperp'), ('apar', 'apar')]:
         plus, minus = copy.deepcopy(c), copy.deepcopy(c)
-        step = 1e-5
         delta = step/(c['D']*c['sigma_8']) if name in ('fs8', 'bs8') else step
         plus[key] += delta
         minus[key] -= delta
@@ -57,8 +61,10 @@ def test_wedge_is_symmetric_in_signed_radial_modes(signal_model, wedge):
     assert noise[0] < rf.INF_NOISE and noise[1] == rf.INF_NOISE
 
 
-def test_full_ap_derivative_matches_sum_of_individually_enabled_terms(signal_model):
+@pytest.mark.parametrize('amplitude', [0., .7, 1.])
+def test_full_ap_derivative_matches_sum_of_individually_enabled_terms(signal_model, amplitude):
     c, e = signal_model
+    c['A'] = amplitude
     k, u = np.geomspace(.035, .2, 13), np.linspace(-1., 1., 9)
     full, names = rf.fisher_integrands(k, u, copy.deepcopy(c), e)
     e['use'] = {key: True for key in e['use']}
@@ -66,6 +72,53 @@ def test_full_ap_derivative_matches_sum_of_individually_enabled_terms(signal_mod
     split, _ = rf.fisher_integrands(k, u, copy.deepcopy(c), e)
     for label in ['aperp', 'apar']:
         np.testing.assert_allclose(split[names.index(label)], full[names.index(label)], atol=1e-14)
+
+
+@pytest.mark.parametrize('amplitude', [0., .7, 1.])
+@pytest.mark.parametrize('component', ['all', 'bao', 'smooth'])
+def test_distance_shift_components_match_finite_differences(
+        signal_model, monkeypatch, amplitude, component):
+    c, e = signal_model
+    c.update(A=amplitude, sigma_nl=7.)
+    e['use'] = dict(f_rsd=True, f_growthfactor=False, alpha_all=False,
+                   alpha_volume=False, alpha_rsd_angle=False,
+                   alpha_rsd_shift=False, alpha_bao_shift=False,
+                   alpha_pk_shift=False)
+    switch = {'all': 'alpha_all', 'bao': 'alpha_bao_shift',
+              'smooth': 'alpha_pk_shift'}[component]
+    e['use'][switch] = True
+    monkeypatch.setattr(rf, 'RSD_FUNCTION', 'kaiser')
+    monkeypatch.setattr(rf, 'Cnoise', lambda q, y, c, e: np.full_like(q, 1e-9))
+    monkeypatch.setattr(rf, 'Cfg', lambda q, y, c, e: np.zeros_like(q))
+    k, u = np.geomspace(.035, .2, 13), np.array([-.9, -.4, 0., .4, .9])
+    K, U = np.meshgrid(k, u)
+    derivatives, names = rf.fisher_integrands(k, u, c, e)
+
+    def log_covariance(aperp=1., apar=1.):
+        # Shift each spectrum component independently of the derivative code.
+        transverse = aperp*K*np.sqrt(1-U**2)
+        radial = apar*K*U
+        shifted_k = np.sqrt(transverse**2 + radial**2)
+        total_k = shifted_k if component == 'all' else K
+        u2 = (radial/total_k)**2 if component == 'all' else U**2
+        smooth_k = shifted_k if component in ('all', 'smooth') else K
+        bao_k = shifted_k if component in ('all', 'bao') else K
+        signal = ((c['bHI'] + c['f']*u2)**2
+                  * np.exp(-u2*(total_k*c['sigma_nl'])**2) * c['D']**2
+                  * c['pk_nobao'](smooth_k)*(1+c['A']*c['fbao'](bao_k))
+                  * c['Tb']**2/(c['r']**2*c['rnu']))
+        if component == 'all':
+            signal *= aperp**2*apar
+        return np.log(signal + 1e-9)
+
+    for parameter in ('aperp', 'apar'):
+        actual = derivatives[names.index(parameter)]
+        for step in (1e-5, 5e-6):
+            plus = log_covariance(**{parameter: 1+step})
+            minus = log_covariance(**{parameter: 1-step})
+            np.testing.assert_allclose(actual, (plus-minus)/(2*step),
+                                       rtol=2e-6, atol=1e-8,
+                                       err_msg=f'{component}, {parameter}, step={step}')
 
 
 @pytest.mark.parametrize('mode', ['i', 'ipaf', 'iaa', 'icyl', 'dish', 'paf'])
