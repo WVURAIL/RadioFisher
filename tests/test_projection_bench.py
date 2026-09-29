@@ -24,11 +24,13 @@ def observables(c, z, fs8):
     return np.array([f, distance/c['h'], c['h']*E(z)])
 
 
-@pytest.mark.parametrize('curvature', [-0.08, 0., 0.08])
+@pytest.mark.parametrize('curvature', [-0.08, -1e-8, 0., 1e-8, 0.08])
+@pytest.mark.parametrize('dark_energy', [(-1., 0.), (-0.9, 0.2)])
 @pytest.mark.parametrize('fs8', [False, True])
-def test_eos_projection_against_independent_quad(curvature, fs8):
+def test_eos_projection_against_independent_quad(curvature, dark_energy, fs8):
     c = copy.deepcopy(experiments.cosmo)
-    c.update(omega_lambda_0=1-c['omega_M_0']-curvature, w0=-0.9, wa=0.2)
+    c.update(omega_lambda_0=1-c['omega_M_0']-curvature,
+             w0=dark_energy[0], wa=dark_energy[1])
     before = copy.deepcopy(c)
     derivs = rf.eos_fisher_matrix_derivs(c, rf.background_evolution_splines(c), fsigma8=fs8)
     assert c == before
