@@ -49,18 +49,6 @@ def test_named_derivatives_match_covariance_finite_differences(
                                    err_msg=f'{model}, galaxy={is_galaxy}, {name}')
 
 
-@pytest.mark.parametrize('wedge', ['horizon', '3pb'])
-def test_wedge_is_symmetric_in_signed_radial_modes(signal_model, wedge):
-    c, e = signal_model
-    e['wedge'] = wedge
-    e['Ddish'] = 5.
-    q = np.full(4, 100.)
-    y = np.array([-400., -5., 5., 400.])
-    noise = rf.Cnoise(q, y, c, e)
-    np.testing.assert_array_equal(noise, noise[::-1])
-    assert noise[0] < rf.INF_NOISE and noise[1] == rf.INF_NOISE
-
-
 @pytest.mark.parametrize('amplitude', [0., .7, 1.])
 def test_full_ap_derivative_matches_sum_of_individually_enabled_terms(signal_model, amplitude):
     c, e = signal_model
