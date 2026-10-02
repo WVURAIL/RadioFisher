@@ -28,7 +28,7 @@ runtime-module gate. The September 2026 local audit used Python 3.12.
 | Survey geometry/noise | Binning coverage and spacing, weighted overlapping experiments, beam/baseline bounds and radiometer time scaling |
 | `fisher_galaxy` | Real integration, finite matrices, photometric damping, and binned power-spectrum output |
 | Plotting | Drawn ellipse reconstructs the input covariance; marginalized triangle subsets/priors; renderable correlation figure and finite log error bars |
-| `extensions` | Frequency weights, surviving volume, delay cuts/transfers, shape/type/range rejection, direct noise response |
+| `extensions` | Frequency weights, surviving volume, shape/type/range rejection, retired filter settings, direct noise response |
 
 The fast numerical benches use deterministic analytic spectra and smaller
 integration grids; they are not timing benchmarks. CAMB executable calls use
@@ -54,7 +54,6 @@ Coverage is a regression floor, not a proof of physical completeness.
   distance-matrix input ownership now follow their documented contracts.
 - Error-ellipse axes, triangle-subset handling, and correlation plotting work
   with current Matplotlib and preserve covariance geometry.
-- Positive and negative radial modes receive the same foreground-wedge cut.
 - Signal distance rescaling agrees with its volume Jacobian and derivatives.
   The all-constraints distance projection includes the BAO shift, and the
   separately enabled smooth-spectrum term no longer cancels that shift.
