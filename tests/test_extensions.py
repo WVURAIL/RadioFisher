@@ -1,17 +1,11 @@
 import numpy as np
 import pytest
-import scipy.interpolate
 
 from radiofisher.extensions import (
-    DELAY_TRANSITION_FACTOR,
-    delay_cut_kpar_min,
-    delay_transfer_fn,
     frequency_noise_penalty,
     validate_experiment_extensions,
-    validate_kpar_min,
     validate_volume_fraction,
 )
-from radiofisher.units import C, PI
 
 
 FREQUENCIES = np.linspace(400.0, 800.0, 9)
@@ -82,133 +76,9 @@ def test_experiment_extension_validation_fails_closed():
         validate_experiment_extensions({"noise_freq_weight": [1.0]})
     with pytest.raises(ValueError, match="noise_freq_mode"):
         validate_experiment_extensions({"noise_freq_mode": "unknown"})
-    with pytest.raises(TypeError, match="kpar_min_fn"):
-        validate_experiment_extensions({"kpar_min_fn": 0.3})
 
 
-# H(z=1.16) for the Planck-2018 fiducial of the CHIME Overview forecasts
-# (h = 0.6732, Omega_m = 0.3158), in km/s/Mpc.
-PLANCK2018_H_AT_1P16 = 132.378728823083
-PLANCK2018_H = 0.6732
-
-
-def test_delay_cut_reproduces_the_published_chime_window():
-    """200 ns cut + 280 ns mask -> k_par,min = 0.35 h/Mpc at z = 1.16.
-
-    This is the window the z ~ 1 auto-spectrum detection actually starts
-    from (Amiri et al. 2025), and it is the anchor for every other delay.
-    """
-    kpar_min_fn = delay_cut_kpar_min(
-        200e-9, lambda z: PLANCK2018_H_AT_1P16, 1420.406)
-
-    kpar_min = kpar_min_fn(1.16)
-
-    assert kpar_min / PLANCK2018_H == pytest.approx(0.351, abs=5e-4)
-
-
-def test_delay_cut_matches_its_closed_form_and_scales_linearly():
-    hubble_fn = lambda z: 70.0 * np.sqrt(0.3 * (1.0 + z)**3 + 0.7)
-    kpar_min_fn = delay_cut_kpar_min(100e-9, hubble_fn, 1420.406)
-
-    expected = (DELAY_TRANSITION_FACTOR * 100e-9 * 2.0 * PI * 1420.406e6
-                * hubble_fn(1.5) / (C * 2.5**2))
-    assert kpar_min_fn(1.5) == pytest.approx(expected)
-
-    doubled = delay_cut_kpar_min(200e-9, hubble_fn, 1420.406)
-    assert doubled(1.5) == pytest.approx(2.0 * kpar_min_fn(1.5))
-
-    untransitioned = delay_cut_kpar_min(
-        100e-9, hubble_fn, 1420.406, transition=1.0)
-    assert untransitioned(1.5) == pytest.approx(
-        kpar_min_fn(1.5) / DELAY_TRANSITION_FACTOR)
-
-
-def test_delay_cut_accepts_a_spline_valued_hubble_rate():
-    """SciPy interp1d returns a 0-d array, not a float."""
-    spline = scipy.interpolate.interp1d([0.0, 3.0], [70.0, 350.0])
-    kpar_min_fn = delay_cut_kpar_min(50e-9, spline, 1420.406)
-
-    assert isinstance(kpar_min_fn(1.0), float)
-    assert kpar_min_fn(1.0) > 0.0
-
-
-@pytest.mark.parametrize("value", [True, np.bool_(False), [0.1, 0.2], "0.1"])
-def test_kpar_min_rejects_booleans_and_non_scalars(value):
-    with pytest.raises(TypeError):
-        validate_kpar_min(value)
-
-
-@pytest.mark.parametrize("value", [-1e-3, np.nan, np.inf])
-def test_kpar_min_rejects_negative_or_nonfinite_values(value):
-    with pytest.raises(ValueError):
-        validate_kpar_min(value)
-
-
-def test_delay_cut_rejects_malformed_inputs():
-    with pytest.raises(TypeError, match="hubble_fn"):
-        delay_cut_kpar_min(100e-9, 70.0, 1420.406)
-    with pytest.raises(ValueError, match="tau_cut_s"):
-        delay_cut_kpar_min(-1e-9, lambda z: 70.0, 1420.406)
-    with pytest.raises(ValueError, match="transition"):
-        delay_cut_kpar_min(100e-9, lambda z: 70.0, 1420.406, transition=0.0)
-    with pytest.raises(ValueError, match="nu_line_mhz"):
-        delay_cut_kpar_min(100e-9, lambda z: 70.0, 0.0)
-    with pytest.raises(ValueError, match="H"):
-        delay_cut_kpar_min(100e-9, lambda z: -70.0, 1420.406)(1.0)
-
-
-def test_delay_transfer_squares_the_normalised_response():
-    """T = (R / R_plateau)^2 at tau / tau_cut, zero below the table, and
-    the last value above it. At 200 ns and z = 1.16, tau / tau_cut = 1.4
-    is k_par = 0.351 h/Mpc, the hard cut's threshold."""
-    ratio = [1.0, 1.2, 1.4, 2.0, 4.0]
-    response = [0.0, 0.6, 0.8, 0.85, 0.87]
-    transfer_fn = delay_transfer_fn(
-        200e-9, lambda z: PLANCK2018_H_AT_1P16, 1420.406, ratio, response)
-
-    kpar_at_1p4 = 0.351 * PLANCK2018_H   # Mpc^-1, tau / tau_cut = 1.4
-    kpar = np.array([0.0, 0.5, 1.0, 1.4, 2.0, 10.0]) / 1.4 * kpar_at_1p4
-    transfer = transfer_fn(kpar, 1.16)
-
-    assert transfer.shape == kpar.shape
-    assert transfer[0] == 0.0 and transfer[1] == 0.0          # below table
-    assert transfer[2] == pytest.approx(0.0)                   # R = 0 at 1.0
-    assert transfer[3] == pytest.approx((0.8 / 0.87) ** 2, rel=2e-2)
-    assert transfer[4] == pytest.approx((0.85 / 0.87) ** 2, rel=2e-2)
-    assert transfer[5] == pytest.approx(1.0)                   # past the end
-    assert np.all((transfer >= 0.0) & (transfer <= 1.0))
-    # a negative k_par is the same mode
-    assert transfer_fn(-kpar, 1.16) == pytest.approx(transfer)
-
-
-def test_delay_transfer_plateau_override_and_scaling_with_tau_cut():
-    ratio = [1.0, 2.0]
-    response = [0.5, 1.0]
-    at_200 = delay_transfer_fn(200e-9, lambda z: 70.0, 1420.406, ratio,
-                               response, plateau=2.0)
-    at_100 = delay_transfer_fn(100e-9, lambda z: 70.0, 1420.406, ratio,
-                               response, plateau=2.0)
-    kpar = np.array([0.05, 0.1])
-
-    # plateau 2.0 halves the normalised response: (1.0 / 2.0)^2 at the end
-    assert at_200(kpar, 1.0)[-1] <= 0.25
-    # halving tau_cut doubles tau / tau_cut at fixed k_par: the 100 ns
-    # transfer at k equals the 200 ns transfer at 2k
-    assert at_100(kpar, 1.0) == pytest.approx(at_200(2.0 * kpar, 1.0))
-
-
-def test_delay_transfer_rejects_malformed_tables():
-    hubble = lambda z: 70.0
-    with pytest.raises(ValueError, match="increasing"):
-        delay_transfer_fn(200e-9, hubble, 1420.406, [1.0, 1.0], [0.0, 1.0])
-    with pytest.raises(ValueError, match="matching"):
-        delay_transfer_fn(200e-9, hubble, 1420.406, [1.0, 2.0], [1.0])
-    with pytest.raises(ValueError, match="non-negative"):
-        delay_transfer_fn(200e-9, hubble, 1420.406, [1.0, 2.0], [-0.1, 1.0])
-    with pytest.raises(ValueError, match="tau_cut_s"):
-        delay_transfer_fn(0.0, hubble, 1420.406, [1.0, 2.0], [0.0, 1.0])
-    with pytest.raises(ValueError, match="plateau"):
-        delay_transfer_fn(200e-9, hubble, 1420.406, [1.0, 2.0], [0.0, 1.0],
-                          plateau=0.0)
-    with pytest.raises(TypeError, match="kpar_transfer_fn"):
-        validate_experiment_extensions({"kpar_transfer_fn": [1.0]})
+@pytest.mark.parametrize("key", ["kpar_min_fn", "kpar_transfer_fn", "wedge"])
+def test_removed_delay_settings_are_rejected(key):
+    with pytest.raises(ValueError, match=key):
+        validate_experiment_extensions({key: None})

@@ -15,8 +15,6 @@ BACKEND_CAPABILITIES = frozenset(
         "P_res",
         "astrophysical_model_profiles",
         "explicit_physical_densities",
-        "kpar_min_fn",
-        "kpar_transfer_fn",
         "noise_freq_mode",
         "noise_freq_weight",
         "vol_frac",
