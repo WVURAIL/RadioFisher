@@ -96,6 +96,19 @@ cosmo = radiofisher.with_astrophysical_profile(
 the Hall/Castorina/Crighton defaults are used. Unknown profiles or model names
 raise `ValueError`.
 
+The Fisher parameters `aperp` and `apar` are the dilations applied in
+`Csignal()`: `aperp = D_M(fid) / D_M` and `apar = H / H(fid)`, with the sound
+horizon held at its fiducial value. The BAO dilations used downstream (RFIsher
+and the CHIME DTV dissertation), `alpha_perp = (D_M / r_d) / (D_M / r_d)_fid`
+and `alpha_par = (H r_d)_fid / (H r_d)`, are their inverses:
+`alpha_perp = 1 / aperp` and `alpha_par = 1 / apar`. At the fiducial point both
+equal 1 and the Jacobian is minus the identity, so marginal errors and the
+`alpha_perp`-`alpha_par` correlation carry over unchanged; only cross terms with
+other parameters change sign. The Fisher row named `sigma_NL` is the
+derivative with respect to `sigma_nl**2` (Mpc^2), not `sigma_nl`. Banks that
+keep the label hold the same quantity; convert with
+`sigma(sigma_nl) = sigma(sigma_nl**2) / (2 * sigma_nl)`.
+
 ## Repository data
 
 `radiofisher/data/array_config/` contains the baseline tables used by runnable
