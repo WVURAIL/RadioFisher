@@ -20,7 +20,7 @@ dependencies = [
 test = ["pytest>=7", "pytest-cov>=5"]
 
 [project.urls]
-Repository = "https://github.com/WVURAIL/RadioFisher"
+Repository = "https://github.com/djgormley/RadioFisher"
 
 [tool.setuptools.packages.find]
 include = ["radiofisher*"]
