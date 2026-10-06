@@ -59,8 +59,17 @@ values are validated and malformed inputs fail closed. Delay-filter settings
 (`kpar_min_fn`, `kpar_transfer_fn`, and `wedge`) are no longer supported;
 passing any of them raises an error.
 
-The package release is 1.0.0, while the backend API remains version 1 because
-these integration semantics did not change during the cleanup.
+The package release is 1.0.0 and the backend API number stayed at 1, but the
+cleanup did change what a forecast integrates. The removed hooks deleted
+line-of-sight modes below a delay-filter cut (`kpar_min_fn`), scaled the
+signal by a filter transfer (`kpar_transfer_fn`), and cut the foreground wedge
+(`wedge`); none of that is applied now, and old settings raise instead of
+running unfiltered. Two hard cuts remain in `Cnoise()`, applied as infinite
+noise: modes with `|k_par|` below the survey's fundamental line-of-sight mode,
+`kfg_fac * 2 pi nu_line / (survey_dnutot * r_nu)` (400 MHz of bandwidth for the
+CHIME presets, `kfg_fac` = 1 by default), and modes with `k` above the
+nonlinear scale `k_nl0 * (1 + z)**(2 / (2 + n_s))` (`k_nl0` = 0.14 Mpc^-1
+unless set).
 
 ## Cosmology and signal conventions
 
