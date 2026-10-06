@@ -59,8 +59,17 @@ values are validated and malformed inputs fail closed. Delay-filter settings
 (`kpar_min_fn`, `kpar_transfer_fn`, and `wedge`) are no longer supported;
 passing any of them raises an error.
 
-The package release is 1.0.0, while the backend API remains version 1 because
-these integration semantics did not change during the cleanup.
+The package release is 1.0.0 and the backend API number stayed at 1, but the
+cleanup did change what a forecast integrates. The removed hooks deleted
+line-of-sight modes below a delay-filter cut (`kpar_min_fn`), scaled the
+signal by a filter transfer (`kpar_transfer_fn`), and cut the foreground wedge
+(`wedge`); none of that is applied now, and old settings raise instead of
+running unfiltered. Two hard cuts remain in `Cnoise()`, applied as infinite
+noise: modes with `|k_par|` below the survey's fundamental line-of-sight mode,
+`kfg_fac * 2 pi nu_line / (survey_dnutot * r_nu)` (400 MHz of bandwidth for the
+CHIME presets, `kfg_fac` = 1 by default), and modes with `k` above the
+nonlinear scale `k_nl0 * (1 + z)**(2 / (2 + n_s))` (`k_nl0` = 0.14 Mpc^-1
+unless set).
 
 ## Cosmology and signal conventions
 
@@ -86,6 +95,19 @@ cosmo = radiofisher.with_astrophysical_profile(
 `fisher()` also accepts those three model keys directly. If they are absent,
 the Hall/Castorina/Crighton defaults are used. Unknown profiles or model names
 raise `ValueError`.
+
+The Fisher parameters `aperp` and `apar` are the dilations applied in
+`Csignal()`: `aperp = D_M(fid) / D_M` and `apar = H / H(fid)`, with the sound
+horizon held at its fiducial value. The BAO dilations used downstream (RFIsher
+and the CHIME DTV dissertation), `alpha_perp = (D_M / r_d) / (D_M / r_d)_fid`
+and `alpha_par = (H r_d)_fid / (H r_d)`, are their inverses:
+`alpha_perp = 1 / aperp` and `alpha_par = 1 / apar`. At the fiducial point both
+equal 1 and the Jacobian is minus the identity, so marginal errors and the
+`alpha_perp`-`alpha_par` correlation carry over unchanged; only cross terms with
+other parameters change sign. The Fisher row named `sigma_NL` is the
+derivative with respect to `sigma_nl**2` (Mpc^2), not `sigma_nl`. Banks that
+keep the label hold the same quantity; convert with
+`sigma(sigma_nl) = sigma(sigma_nl**2) / (2 * sigma_nl)`.
 
 ## Repository data
 
@@ -140,4 +162,5 @@ intensity mapping experiments,” *The Astrophysical Journal* **803**, 21
 [doi:10.1088/0004-637X/803/1/21](https://doi.org/10.1088/0004-637X/803/1/21).
 
 RadioFisher is distributed under the Academic Free License 3.0. The original
-author is Philip Bull; the current repository is maintained by WVURAIL.
+author is Philip Bull; the current repository is maintained at
+[djgormley/RadioFisher](https://github.com/djgormley/RadioFisher).
