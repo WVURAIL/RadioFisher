@@ -163,4 +163,4 @@ intensity mapping experiments,” *The Astrophysical Journal* **803**, 21
 
 RadioFisher is distributed under the Academic Free License 3.0. The original
 author is Philip Bull; the current repository is maintained at
-[djgormley/RadioFisher](https://github.com/djgormley/RadioFisher).
+[WVURAIL/RadioFisher](https://github.com/WVURAIL/RadioFisher).
