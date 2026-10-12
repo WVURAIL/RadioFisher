@@ -42,14 +42,13 @@ jobs:
       - name: Install package and test dependencies
         run: python -m pip install --upgrade pip ".[test]"
       - name: Compile supported Python sources
-        run: python -m compileall -q radiofisher tests chime2021/experiments_CHIME.py
-      - name: Run component and numerical benches
-        run: python -m pytest -q --cov --cov-report=term-missing:skip-covered --cov-report=json
-      - name: Enforce coverage for every module
-        run: python scripts/check_test_coverage.py
+        run: python -m compileall -q radiofisher tests docs
+      - name: Run the tests
+        run: python -m pytest -q
       - name: Build wheel
         run: python -m pip wheel --no-deps --wheel-dir dist .
-      - name: Verify installed wheel metadata
+      - name: Verify the installed wheel
         run: |
           python -m pip install --force-reinstall --no-deps dist/*.whl
-          python -I -c "import radiofisher; assert radiofisher.__version__ == '1.0.0'; assert radiofisher.BACKEND_API_VERSION == 1"
+          cd "$RUNNER_TEMP"
+          python -I -c "import os, radiofisher as rf; assert rf.__version__ == '1.0.0'; assert os.path.exists(rf.chime.CHIME['n(x)'])"

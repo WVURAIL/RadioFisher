@@ -5,24 +5,4 @@ __pycache__/
 *.egg-info/
 build/
 dist/
-.coverage
-coverage.json
-htmlcov/
 .venv/
-
-# Generated forecast products and CAMB caches
-/output/
-/outputs/
-/paramfiles/
-/cache*.dat
-/fisher_bao_*.dat
-/snr-*.npy
-/chime2021/cache*.dat
-
-# Generated root-level figures (documentation assets elsewhere remain visible)
-/*.png
-/*.pdf
-
-# Historical local scratch directories
-/old/
-/old_code/
