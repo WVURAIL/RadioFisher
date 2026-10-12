@@ -67,7 +67,8 @@ Everything off this path: the other telescopes and survey modes, galaxy surveys,
 modified gravity, neutrino and non-Gaussianity parameters, CAMB execution, the
 redshift-binning and plotting helpers, and the CHIME Overview's multi-bin combination.
 Commit 6348429 is the last version with all of it. The tests check that the cut code
-reproduces that version's Fisher matrices; they agree exactly.
+reproduces that version's Fisher matrices: exactly with the numpy and scipy they were
+recorded with, and to about 1e-9 with other builds.
 
 ## Tests
 
