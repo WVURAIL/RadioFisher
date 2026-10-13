@@ -6,3 +6,6 @@ __pycache__/
 build/
 dist/
 .venv/
+# Coverage and lint output
+.coverage
+.ruff_cache/
