@@ -22,6 +22,7 @@ test = ["pytest>=7"]
 Repository = "https://github.com/WVURAIL/RadioFisher"
 
 [tool.setuptools]
+package-dir = {"" = "src"}
 packages = ["radiofisher"]
 
 [tool.setuptools.dynamic]

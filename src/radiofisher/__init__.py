@@ -2,7 +2,7 @@
 
 See baofisher.py for the call graph and chime.py for the CHIME inputs.
 """
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 from . import chime
 from .baofisher import (

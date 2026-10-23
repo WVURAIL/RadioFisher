@@ -8,7 +8,7 @@ cylinder-interferometer noise, the BAO-shift dilations, and one hook for a
 power that the model does not include (``expt['P_res']``).
 
     fisher(zmin, zmax, cosmo, expt, cosmo_fns)
-      prepare_bin                  bin centre, distances, HI signal amplitude, grids
+      prepare_bin                  bin center, distances, HI signal amplitude, grids
       fisher_integrands(k, mu)     one row per parameter: d ln C_S / d theta * C_S / C_tot
         Csignal                    HI signal power, C_S
         Cnoise                     thermal noise power, C_N (Tsys_tot, interferometer_response)
@@ -28,8 +28,9 @@ import numpy as np
 import scipy.integrate
 import scipy.interpolate
 
-from .castorina import castorinaBias
-from .units import C
+from .castorina import hi_bias
+from .instrument import collecting_area_m2, mode_limits, wavelength_m
+from .units import FORECAST_LIGHT_SPEED_KM_S
 
 # Samples in k and mu for the Simpson integration in fisher().
 NSAMP_K = 500
@@ -66,7 +67,7 @@ def load_power_spectrum(cosmo, cachefile):
     cosmo['k_in_min'] = np.min(k_in)
     return cosmo
 
-def spline_pk_nobao(k_in, pk_in, kref=[2.4e-2, 4.5e-1]):
+def spline_pk_nobao(k_in, pk_in, kref=(2.4e-2, 4.5e-1)):
     """
     Construct a smooth power spectrum with BAOs removed, and a corresponding
     BAO template function, by using a two-stage splining process.
@@ -81,8 +82,8 @@ def spline_pk_nobao(k_in, pk_in, kref=[2.4e-2, 4.5e-1]):
     # Construct "wiggles" function using spline as a reference, then spline it
     # and find its 2nd derivative
     fwiggle = scipy.interpolate.UnivariateSpline(k_in, pk_in / pk_smooth(k_in), k=3, s=0)
-    derivs = np.array([fwiggle.derivatives(_k) for _k in k_in]).T
-    d2 = scipy.interpolate.UnivariateSpline(k_in, derivs[2], k=3, s=1.0) #s=1.
+    second_derivative = fwiggle.derivative(2)(k_in)
+    d2 = scipy.interpolate.UnivariateSpline(k_in, second_derivative, k=3, s=1.0)
     # (s=1 to get sensible smoothing)
 
     # Find maxima and minima of the gradient (zeros of 2nd deriv.), then put a
@@ -151,11 +152,11 @@ def background_evolution_splines(cosmo, zmax=10., nsamples=500):
 
     r_c = np.concatenate( ([0.], scipy.integrate.cumulative_trapezoid(1./E, x=_z)) )
     if ok > 0.:
-        _r = C/(H0*np.sqrt(ok)) * np.sinh(r_c * np.sqrt(ok))
+        _r = FORECAST_LIGHT_SPEED_KM_S/(H0*np.sqrt(ok)) * np.sinh(r_c * np.sqrt(ok))
     elif ok < 0.:
-        _r = C/(H0*np.sqrt(-ok)) * np.sin(r_c * np.sqrt(-ok))
+        _r = FORECAST_LIGHT_SPEED_KM_S/(H0*np.sqrt(-ok)) * np.sin(r_c * np.sqrt(-ok))
     else:
-        _r = (C/H0) * r_c
+        _r = (FORECAST_LIGHT_SPEED_KM_S/H0) * r_c
 
     # Integrate linear growth rate to find linear growth factor, D(z)
     # N.B. D(z=0) = 1.
@@ -183,7 +184,7 @@ def bias_HI(z):
     b_HI(z), the halo-model fit of Castorina & Villaescusa-Navarro (2017),
     tabulated in castorina.py.
     """
-    return castorinaBias(z)
+    return hi_bias(z)
 
 def Tb(z, cosmo):
     """
@@ -238,7 +239,7 @@ def logpk_derivative(pk, kgrid):
     dlogpk_dk = np.log(dP) / dk
     return dlogpk_dk
 
-def fbao_derivative(fbao, kgrid, kref=[3e-2, 4.5e-1]):
+def fbao_derivative(fbao, kgrid, kref=(3e-2, 4.5e-1)):
     """
     Calculate the first derivative of the fbao(k) function.
 
@@ -264,7 +265,9 @@ def fbao_derivative(fbao, kgrid, kref=[3e-2, 4.5e-1]):
     idxs = np.where(kgrid <= kref[0])
     if len(idxs[0]) > 0:
         dfbao_dk[idxs] = 0.
-        dfbao_dk[np.max(idxs) + 1] = 0.
+        next_index = np.max(idxs) + 1
+        if next_index < kgrid.size:
+            dfbao_dk[next_index] = 0.
 
     # Interpolate
     idfbao_dk = scipy.interpolate.interp1d( kgrid, dfbao_dk, kind='linear',
@@ -275,7 +278,7 @@ def integrate_grid(integrand, kgrid, ugrid):
     """
     Integrate over a 2D grid of sample points using the Simpson rule.
     """
-    Ik = [scipy.integrate.simpson(integrand.T[i], x=ugrid) for i in range(kgrid.size)]
+    Ik = scipy.integrate.simpson(integrand, x=ugrid, axis=0)
     return scipy.integrate.simpson(Ik, x=kgrid)
 
 def integrate_fisher_elements(derivs, kgrid, ugrid):
@@ -284,7 +287,7 @@ def integrate_fisher_elements(derivs, kgrid, ugrid):
     populating a matrix with the results.
     """
     Nparams = len(derivs)
-    K, U = np.meshgrid(kgrid, ugrid)
+    K = np.asarray(kgrid)[None, :]
 
     # Loop through matrix elements, performing the appropriate integral for each
     F = np.zeros((Nparams, Nparams))
@@ -342,11 +345,10 @@ def Cnoise(q, y, cosmo, expt):
     kpar = y / (c['apar']*c['rnu'])
 
     nu = expt['nu_line'] / (1. + c['z'])
-    l = 3e8 / (nu * 1e6) # Wavelength (m)
+    wavelength = wavelength_m(nu)
 
-    # Number of receiver polarisation channels (default is two) and efficiency
+    # Number of receiver polarization channels (default is two) and efficiency
     npol = expt['npol'] if 'npol' in list(expt.keys()) else 2.
-    effic = expt['effic'] if 'effic' in list(expt.keys()) else 0.7
 
     # Radiometer noise per unit survey volume
     Vsurvey = expt['Sarea'] * expt['dnutot'] / expt['nu_line']
@@ -354,19 +356,16 @@ def Cnoise(q, y, cosmo, expt):
     noise = Tsys**2. * Vsurvey / (npol * expt['ttot'] * expt['dnutot'])
 
     # Cylinder: collecting area per receiver and a ~90 deg x l/D field of view
-    Aeff = effic * expt['Ncyl'] * expt['cyl_area'] / expt['Ndish']
-    theta_b = np.sqrt( 0.5 * np.pi * l / expt['Ddish'] )
+    Aeff = collecting_area_m2(expt)
+    theta_b = np.sqrt( 0.5 * np.pi * wavelength / expt['Ddish'] )
     noise *= interferometer_response(q, y, cosmo, expt)
-    noise *= l**4. / (expt['Nbeam'] * (Aeff * theta_b)**2.)
+    noise *= wavelength**4. / (expt['Nbeam'] * (Aeff * theta_b)**2.)
 
     # Cut-off in parallel direction due to (freq.-dep.) foreground subtraction
-    kfg = 2.*np.pi * expt['nu_line'] / (expt['survey_dnutot'] * c['rnu'])
-    kfg *= expt['kfg_fac'] if 'kfg_fac' in list(expt.keys()) else 1.
+    kfg, kmax = mode_limits(c, expt)
     noise[np.where(np.abs(kpar) < kfg)] = INF_NOISE
 
     # Cut off nonlinear scales (Smith et al. 2003, Eq. 20)
-    knl0 = expt['k_nl0']
-    kmax = knl0 * (1.+c['z'])**(2./(2. + c['ns']))
     noise[np.where(np.sqrt(kpar**2. + kperp**2.) > kmax)] = INF_NOISE
 
     return noise
@@ -398,8 +397,7 @@ def Csignal(q, y, cosmo, expt):
 
 def Cfg(q, y, cosmo, expt):
     """
-    Foreground removal noise covariance, from p13 (and Table 1) of Pedro's
-    notes. [mK^2]
+    Foreground removal noise covariance, from Santos et al. (2005), scaled by epsilon_fg squared. [mK^2]
     """
     fg = cosmo['foregrounds']
     n_fg = len(fg['A']) # No. of foreground components
@@ -425,14 +423,15 @@ def Cfg(q, y, cosmo, expt):
 # Fisher integrands
 ################################################################################
 
-def fisher_integrands(kgrid, ugrid, cosmo, expt):
+def fisher_integrands(kgrid, ugrid, cosmo, expt, *, paired=False):
     """
     Integrands over (k, mu) for the Fisher matrix, one per parameter, in the
-    order ( A, b_HI, Tb, sigma_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8,
+    order ( A, b_HI, Tb, s_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8,
     pk [, _Pres] ). Each is d ln C_S / d theta * C_S / C_tot. Which dilation
     terms enter aperp and apar is set by ``expt['use']``.
-    The historical label sigma_NL denotes damping variance s_NL = sigma_nl**2;
-    its log-derivative is -k**2 * mu**2, not the damping-length derivative.
+    s_NL is damping variance in Mpc squared, with log-derivative -k**2 * mu**2.
+    With paired=True, broadcast kgrid and ugrid pointwise instead of constructing
+    their Cartesian product; this supports batches of segmented quadrature nodes.
     """
     c = cosmo
     use = expt['use']
@@ -440,7 +439,8 @@ def fisher_integrands(kgrid, ugrid, cosmo, expt):
     aperp = c['aperp']; apar = c['apar']
 
     # Convert (k, u) into (q, y)
-    K, U = np.meshgrid(kgrid, ugrid)
+    K, U = (np.broadcast_arrays(np.atleast_1d(kgrid), np.atleast_1d(ugrid))
+            if paired else np.meshgrid(kgrid, ugrid))
     y = rnu * K * U
     q = r * K * np.sqrt(1. - U**2.)
 
@@ -523,10 +523,10 @@ def fisher_integrands(kgrid, ugrid, cosmo, expt):
     deriv_list = [ deriv_A, deriv_bHI, deriv_Tb, deriv_sig2, deriv_sigma8,
                    deriv_ns, deriv_f, deriv_aperp, deriv_apar,
                    deriv_fsig8, deriv_bsig8, deriv_pk ]
-    paramnames = ['A', 'b_HI', 'Tb', 'sigma_NL', 'sigma8tot', 'n_s', 'f',
+    paramnames = ['A', 'b_HI', 'Tb', 's_NL', 'sigma8tot', 'n_s', 'f',
                   'aperp', 'apar', 'fs8', 'bs8', 'pk']
 
-    # Unmodelled additive residual power (e.g. RFI surviving a mask).
+    # Unmodeled additive residual power (e.g. RFI surviving a mask).
     #
     # An additive dP that the model does not include biases the recovered
     # parameters at first order by  dtheta_i = sum_j (F^-1)_ij B_j  with
@@ -541,7 +541,7 @@ def fisher_integrands(kgrid, ugrid, cosmo, expt):
     # callable f(k, mu, cn, cs) returning dP on the (k, mu) grid.
     # The caller must strip the '_Pres' row/column before inverting F; the
     # entry is a bias, not a parameter, and treating it as one would
-    # marginalise over the very contamination being tested.
+    # marginalize over the very contamination being tested.
     if 'P_res' in expt:
         pres = expt['P_res']
         c_res = pres(k, u2**0.5, cn, cs) if callable(pres) else float(pres) * cn
@@ -558,11 +558,15 @@ def fisher_integrands(kgrid, ugrid, cosmo, expt):
 def prepare_bin(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0):
     """
     Set up one redshift bin: copies of ``cosmo`` and ``expt`` filled in at the
-    bin centre, the volume factor that multiplies the integrals, and the
+    bin center, the volume factor that multiplies the integrals, and the
     (k, mu) grids that fisher() integrates over.
 
     Returns (cosmo, expt, Vfac, kgrid, ugrid).
     """
+    if not np.isfinite([zmin, zmax]).all() or not 0 <= zmin < zmax:
+        raise ValueError("redshift bounds must satisfy 0 <= zmin < zmax")
+    if not np.isfinite([kmin, kmax]).all() or not 0 < kmin < kmax:
+        raise ValueError("wavenumber bounds must satisfy 0 < kmin < kmax")
     # Copy, to make sure we don't modify input expt or cosmo
     cosmo = copy.deepcopy(cosmo)
     expt = copy.deepcopy(expt)
@@ -578,13 +582,13 @@ def prepare_bin(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0):
     expt['n(x)_file'] = expt['n(x)']
     expt['n(x)'] = load_interferom_file(expt['n(x)'])
 
-    # Bin-centre values
+    # Bin-center values
     cosmo['omega_HI'] = omega_HI(z)
     cosmo['bHI'] = bias_HI(z)
     cosmo['Tb'] = Tb(z, cosmo)
     cosmo['z'] = z; cosmo['D'] = DD(z)
     cosmo['f'] = ff(z)
-    cosmo['r'] = rr(z); cosmo['rnu'] = C*(1.+z)**2. / HH(z) # Perp/par. dist. scales
+    cosmo['r'] = rr(z); cosmo['rnu'] = FORECAST_LIGHT_SPEED_KM_S*(1.+z)**2. / HH(z) # Perp/par. dist. scales
 
     # Physical volume (in rad^2 Mpc^3) (note factor of nu_line in here)
     Vphys = expt['Sarea'] * (expt['dnutot']/expt['nu_line']) \

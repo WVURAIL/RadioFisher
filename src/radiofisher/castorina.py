@@ -5,10 +5,12 @@ z = 2.3), as tabulated by E. Castorina for the PUMANoise code
 (https://github.com/slosar/PUMANoise, April 2019 update). Columns: z, b_HI,
 shot noise. Only the bias is used.
 """
+import io
+
 import numpy as np
 from scipy.interpolate import interp1d
 
-z_, bias_, Psn_=np.array([[float(x) for x in line.split()] for line in
+_redshift, _bias, _shot_noise = np.loadtxt(io.StringIO(
 """0.2 	1.0826043	118.89453
 0.3 	1.0826043	118.89453
 0.35	1.1184118	120.58044
@@ -125,5 +127,5 @@ z_, bias_, Psn_=np.array([[float(x) for x in line.split()] for line in
 5.9 	4.0567169	19.507655
 5.95	4.0939672	19.618291
 6.0  	4.131457 	19.737877
-6.1  	4.131457 	19.737877 """.split("\n")]).T
-castorinaBias=interp1d(z_,bias_)
+6.1  	4.131457 	19.737877 """), unpack=True)
+hi_bias = interp1d(_redshift, _bias)

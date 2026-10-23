@@ -45,7 +45,7 @@ s = [(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-famil
      text(24, 56, "Every function on the path RFIsher uses. A residual power enters in one place, the gold box.", 13)]
 
 # inputs
-s.append(box(24, 76, 360, 118, "chime.py", ["cosmo: Planck 2018, sigma_NL = 7 Mpc", "CHIME: 4 cylinders x 256 feeds, T_sys = 55 K,",
+s.append(box(24, 76, 360, 118, "chime.py", ["cosmo: Planck 2018, sigma_nl = 7 Mpc", "CHIME: 4 cylinders x 256 feeds, T_sys = 55 K,",
                                              "31,000 deg^2, 0.39 MHz channels, n(u) file,", "one year, BAO shift only"]))
 s.append(box(408, 76, 360, 118, "load_power_spectrum(cosmo, table)", ["linear P(k) table at z = 0", "spline_pk_nobao: split into the smooth",
                                                                     "pk_nobao(k) and the BAO wiggles fbao(k)"]))
@@ -69,7 +69,7 @@ s.append(arrow(590, 398, 590, 436))
 s.append(f'<rect x="44" y="438" width="1092" height="400" rx="8" fill="{BG}" stroke="{INK}" stroke-width="1.5"/>')
 s.append(text(58, 464, "2  fisher_integrands(k, mu, cosmo, expt)", 14.5, INK, "600", True))
 s.append(text(58, 484, "at every Fourier mode (k, mu) of the grid", 12.5))
-s.append(box(62, 498, 340, 118, "Csignal", ["C_S = T_b^2 (b + f mu^2)^2", "  x exp(-k^2 mu^2 sigma_NL^2)", "  x (1 + A fbao) D^2 pk_nobao / (r^2 r_nu)",
+s.append(box(62, 498, 340, 118, "Csignal", ["C_S = T_b^2 (b + f mu^2)^2", "  x exp(-k^2 mu^2 s_NL)", "  x (1 + A fbao) D^2 pk_nobao / (r^2 r_nu)",
                                             "the HI signal, carrying the BAO"]))
 s.append(box(420, 498, 340, 118, "Cnoise", ["T_sys^2 V / (n_pol t_tot dnu)  (Tsys_tot)", "x interferometer_response: 1 / n(u), channel",
                                            "infinite below k_fg and above k_NL"]))
@@ -78,7 +78,7 @@ s.append(box(62, 632, 1056, 40, "C_tot = C_S + C_N + C_FG", []))
 for x in (232, 590, 948):
     s.append(arrow(x, 616, x, 630))
 s.append(box(62, 690, 640, 132, "one row per parameter", ["d_i = (d ln C_S / d theta_i) x C_S / C_tot",
-                                                         "A, b_HI, T_b, sigma_NL, sigma_8, n_s, f, fs8, bs8, P(k)",
+                                                         "A, b_HI, T_b, s_NL, sigma_8, n_s, f, fs8, bs8, P(k)",
                                                          "aperp, apar: the BAO shift term, through dfbao_dk",
                                                          "(logpk_derivative feeds the switched-off terms)"]))
 s.append(box(722, 690, 396, 132, "expt['P_res']  ->  row '_Pres'", ["d_res = dP(k, mu, C_N, C_S) / C_tot",
@@ -92,7 +92,7 @@ s.append(arrow(590, 838, 590, 860))
 s.append(box(44, 862, 1092, 78, "3  integrate_fisher_elements(derivs, k, mu)",
              ["F_ij = Vfac x Int Int k^2 d_i d_j dk dmu   (integrate_grid: Simpson rule over the grid)",
               "RFIsher calls prepare_bin and fisher_integrands itself and integrates with converged Gauss-Legendre segments"]))
-s.append(text(24, 986, "Output: F with rows A, b_HI, T_b, sigma_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8, pk and, with a residual, _Pres.", 12.5, INK))
+s.append(text(24, 986, "Output: F with rows A, b_HI, T_b, s_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8, pk and, with a residual, _Pres.", 12.5, INK))
 s.append(text(24, 1008, "The clean block gives the uncertainties; the _Pres column gives the bias. Strip _Pres before inverting.", 12.5, INK))
 s.append("</svg>")
 (Path(__file__).resolve().parents[1] / "docs" / "radiofisher_functions.svg").write_text("\n".join(s) + "\n")
