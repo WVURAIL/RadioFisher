@@ -42,7 +42,7 @@ jobs:
       - name: Install package and test dependencies
         run: python -m pip install --upgrade pip ".[test]"
       - name: Compile supported Python sources
-        run: python -m compileall -q radiofisher tests docs
+        run: python -m compileall -q radiofisher tests tools
       - name: Run the tests
         run: python -m pytest -q
       - name: Build wheel
