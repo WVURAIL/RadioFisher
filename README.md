@@ -108,3 +108,14 @@ Philip Bull and Pedro G. Ferreira wrote RadioFisher (2013 to 2014). Simon Forema
 CHIME configuration for the CHIME Overview. If you use this code, cite Bull, Ferreira,
 Patel & Santos (2015), [doi:10.1088/0004-637X/803/1/21](https://doi.org/10.1088/0004-637X/803/1/21).
 Academic Free License v3.0; see `LICENSE`.
+
+### Figure colors
+
+Plots and diagrams use the WVU colors from the
+[Beamer template](https://github.com/WVURAIL/wvu_beamer_template), with a standalone
+copy in `tools/wvu_palette.py`. Update it with the template's
+`tools/export_plot_palette.py`. Blue denotes measurements; old gold provides
+contrast for model curves and small labels. Additional series use WVU accents
+and distinct markers or line styles where needed. Grayscale masks keep their
+binary meaning. Journal requirements take precedence; this palette does not
+change the numerical calculations or frozen records.

@@ -1,7 +1,11 @@
 """Draw docs/radiofisher_functions.svg: the forecast at function level, and where a residual enters."""
 from pathlib import Path
 
-INK, MUTED, SURF, BG, AMBER, AMBERBG = "#1c2126", "#5a6168", "#ffffff", "#f6f7f5", "#9a5a00", "#fff4e0"
+import wvu_palette as wvu
+
+INK, MUTED, SURF, BG = wvu.INK, wvu.MUTED, wvu.WHITE, wvu.NOT_QUITE_WHITE
+MODEL, MODEL_BG = wvu.MODEL, wvu.tint(wvu.MODEL)
+
 MONO = "DejaVu Sans Mono, monospace"
 
 
@@ -31,14 +35,14 @@ def arrow(x1, y1, x2, y2, col=INK, mk="a", label=None, lx=None, ly=None):
 
 
 W, H = 1180, 1030
-s = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-family="DejaVu Sans, sans-serif" role="img" '
-     'aria-label="RadioFisher call graph: inputs, fisher(), the integrands and where the residual row is added">',
-     "<defs>"
+s = [(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-family="DejaVu Sans, sans-serif" role="img" '
+     'aria-label="RadioFisher call graph: inputs, fisher(), the integrands and where the residual row is added">'),
+     ("<defs>"
      f'<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="{INK}"/></marker>'
-     f'<marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="{AMBER}"/></marker>'
-     "</defs>", f'<rect width="{W}" height="{H}" fill="{BG}"/>',
+     f'<marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="{MODEL}"/></marker>'
+     "</defs>"), f'<rect width="{W}" height="{H}" fill="{BG}"/>',
      text(24, 34, "RadioFisher: one redshift bin of a 21 cm BAO forecast", 19, INK, "600"),
-     text(24, 56, "Every function on the path RFIsher uses. A residual power enters in one place, the amber box.", 13)]
+     text(24, 56, "Every function on the path RFIsher uses. A residual power enters in one place, the gold box.", 13)]
 
 # inputs
 s.append(box(24, 76, 360, 118, "chime.py", ["cosmo: Planck 2018, sigma_NL = 7 Mpc", "CHIME: 4 cylinders x 256 feeds, T_sys = 55 K,",
@@ -62,7 +66,7 @@ s.append(box(44, 302, 1092, 96, "1  prepare_bin(zmin, zmax, cosmo, expt, cosmo_f
 s.append(arrow(590, 398, 590, 436))
 
 # integrands
-s.append(f'<rect x="44" y="438" width="1092" height="400" rx="8" fill="#fbfbfa" stroke="{INK}" stroke-width="1.5"/>')
+s.append(f'<rect x="44" y="438" width="1092" height="400" rx="8" fill="{BG}" stroke="{INK}" stroke-width="1.5"/>')
 s.append(text(58, 464, "2  fisher_integrands(k, mu, cosmo, expt)", 14.5, INK, "600", True))
 s.append(text(58, 484, "at every Fourier mode (k, mu) of the grid", 12.5))
 s.append(box(62, 498, 340, 118, "Csignal", ["C_S = T_b^2 (b + f mu^2)^2", "  x exp(-k^2 mu^2 sigma_NL^2)", "  x (1 + A fbao) D^2 pk_nobao / (r^2 r_nu)",
@@ -80,9 +84,9 @@ s.append(box(62, 690, 640, 132, "one row per parameter", ["d_i = (d ln C_S / d t
 s.append(box(722, 690, 396, 132, "expt['P_res']  ->  row '_Pres'", ["d_res = dP(k, mu, C_N, C_S) / C_tot",
                                                                    "the residual's projection; its column",
                                                                    "gives the first-order bias.",
-                                                                   "It is never added to C_tot."], stroke=AMBER, sw=2.2, fill=AMBERBG, tcol=AMBER))
+                                                                   "It is never added to C_tot."], stroke=MODEL, sw=2.2, fill=MODEL_BG, tcol=MODEL))
 s.append(arrow(400, 672, 400, 688))
-s.append(arrow(920, 672, 920, 688, AMBER, "b"))
+s.append(arrow(920, 672, 920, 688, MODEL, "b"))
 s.append(arrow(590, 838, 590, 860))
 
 s.append(box(44, 862, 1092, 78, "3  integrate_fisher_elements(derivs, k, mu)",
