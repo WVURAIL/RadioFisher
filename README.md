@@ -33,16 +33,41 @@ Strip `_Pres` before inverting.
 
 ## Use
 
-```python
+For a standalone checkout, start in a new directory with Git and Python 3.10
+or newer. No telescope data or GPU is needed.
+
+```bash
+git clone https://github.com/WVURAIL/RadioFisher.git
+cd RadioFisher
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e ".[test]"
+```
+
+Run the following from the checkout root. The small P(k) fixture is included
+in this repository under `tests/data/`; it is not installed with the library.
+
+```bash
+python - <<'PY'
 import copy
 import radiofisher as rf
 from radiofisher.units import HRS_MHZ
 
-cosmo = rf.load_power_spectrum(copy.deepcopy(rf.chime.cosmo), "pk_planck2018.dat")
+cosmo = rf.load_power_spectrum(copy.deepcopy(rf.chime.cosmo), "tests/data/pk_planck2018.dat")
 fns = rf.background_evolution_splines(cosmo)
 expt = dict(rf.chime.CHIME, ttot=8760 * HRS_MHZ, P_res=0.01)
 F, names = rf.fisher(1.20, 1.25, cosmo, expt, fns)
+print(F.shape, names[-1])
+PY
+python -m pytest -q
 ```
+
+The example prints `(13, 13) _Pres`: twelve forecast parameters plus the
+residual row. The tests check the matrices against the recorded reference.
+
+If you are using RFIsher, let its installer select RadioFisher's pinned
+revision. Use this separate environment to develop RadioFisher itself instead
+of replacing the dependency in a forecast-reproduction environment.
 
 The P(k) table is a linear matter power spectrum at z = 0 (columns k in Mpc^-1 and
 P in Mpc^3). RFIsher ships the Planck 2018 table and checks it against the cosmology.
