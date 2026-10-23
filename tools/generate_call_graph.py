@@ -91,4 +91,4 @@ s.append(box(44, 862, 1092, 78, "3  integrate_fisher_elements(derivs, k, mu)",
 s.append(text(24, 986, "Output: F with rows A, b_HI, T_b, sigma_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8, pk and, with a residual, _Pres.", 12.5, INK))
 s.append(text(24, 1008, "The clean block gives the uncertainties; the _Pres column gives the bias. Strip _Pres before inverting.", 12.5, INK))
 s.append("</svg>")
-Path(__file__).with_name("radiofisher_functions.svg").write_text("\n".join(s) + "\n")
+(Path(__file__).resolve().parents[1] / "docs" / "radiofisher_functions.svg").write_text("\n".join(s) + "\n")

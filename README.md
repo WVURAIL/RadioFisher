@@ -14,7 +14,7 @@ DTV power each 6 MHz channel can tolerate.
 
 For one redshift bin, `fisher()` returns the Fisher matrix of twelve parameters:
 the BAO amplitude `A`, the HI bias `b_HI`, the brightness temperature `Tb`, the damping
-`sigma_NL`, `sigma8tot`, `n_s`, the growth rate `f`, the two dilations `aperp` and
+variance `s_NL = sigma_NL^2` (legacy matrix label `sigma_NL`), `sigma8tot`, `n_s`, the growth rate `f`, the two dilations `aperp` and
 `apar`, `fs8`, `bs8` and the power amplitude `pk`. Each element is
 
     F_ij = Vfac * Int Int k^2 d_i d_j dk dmu,   d_i = (d ln C_S / d theta_i) * C_S / C_tot
@@ -59,7 +59,7 @@ Simpson grid is not accurate enough for the bias row.
 | `radiofisher/chime.py` | CHIME and the Planck 2018 cosmology, as in the CHIME Overview |
 | `radiofisher/castorina.py` | the HI bias fit of Castorina & Villaescusa-Navarro (2017) |
 | `radiofisher/data/nx_CHIME_800.dat` | CHIME's as-built baseline density n(u) |
-| `docs/diagram.py` | draws the call graph above |
+| `tools/generate_call_graph.py` | draws the call graph above |
 
 ## What was removed
 

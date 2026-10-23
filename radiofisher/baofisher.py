@@ -71,11 +71,6 @@ def spline_pk_nobao(k_in, pk_in, kref=[2.4e-2, 4.5e-1]):
     Construct a smooth power spectrum with BAOs removed, and a corresponding
     BAO template function, by using a two-stage splining process.
     """
-    # Get interpolating function for input P(k) in log-log space
-    _interp_pk = scipy.interpolate.interp1d( np.log(k_in), np.log(pk_in),
-                                        kind='quadratic', bounds_error=False )
-    interp_pk = lambda x: np.exp(_interp_pk(np.log(x)))
-
     # Spline all (log-log) points except those in user-defined "wiggle region",
     # and then get derivatives of result
     idxs = np.where(np.logical_or(k_in <= kref[0], k_in >= kref[1]))
@@ -436,6 +431,8 @@ def fisher_integrands(kgrid, ugrid, cosmo, expt):
     order ( A, b_HI, Tb, sigma_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8,
     pk [, _Pres] ). Each is d ln C_S / d theta * C_S / C_tot. Which dilation
     terms enter aperp and apar is set by ``expt['use']``.
+    The historical label sigma_NL denotes damping variance s_NL = sigma_nl**2;
+    its log-derivative is -k**2 * mu**2, not the damping-length derivative.
     """
     c = cosmo
     use = expt['use']
@@ -545,7 +542,7 @@ def fisher_integrands(kgrid, ugrid, cosmo, expt):
     # The caller must strip the '_Pres' row/column before inverting F; the
     # entry is a bias, not a parameter, and treating it as one would
     # marginalise over the very contamination being tested.
-    if 'P_res' in list(expt.keys()):
+    if 'P_res' in expt:
         pres = expt['P_res']
         c_res = pres(k, u2**0.5, cn, cs) if callable(pres) else float(pres) * cn
         deriv_list.append(c_res / ctot)
