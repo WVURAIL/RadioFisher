@@ -9,9 +9,9 @@ experiments_CHIME.py); keys the forecast does not read are removed.
 """
 import os
 
-from .units import D2RAD, HRS_MHZ
+from .units import DEG_TO_RAD, HOUR_IN_MHZ_INVERSE, NU21_MHZ
 
-# Planck 2018 (CMB only) best fit, Amiri et al. 2022 Eq. A8
+# Planck 2018 (CMB only) best fit, CHIME Collaboration 2022 Eq. A8
 cosmo = {
     'omega_M_0':        0.3158,
     'omega_lambda_0':   1 - 0.3158,
@@ -42,8 +42,8 @@ USE = {
 }
 
 SURVEY = {
-    'ttot':             365 * 24 * HRS_MHZ,      # Total integration time [MHz^-1]
-    'nu_line':          1420.406,                # Rest-frame freq. of emission line [MHz]
+    'ttot':             365 * 24 * HOUR_IN_MHZ_INVERSE,      # Total integration time [MHz^-1]
+    'nu_line':          NU21_MHZ,                # Rest-frame freq. of emission line [MHz]
     'epsilon_fg':       0,                       # FG subtraction residual amplitude
     'k_nl0':            0.14,                    # Non-linear scale at z=0 (sets kmax)
     'use':              USE,
@@ -70,7 +70,7 @@ CHIME = {
     'survey_dnutot':    400.,               # bandwidth of the whole survey [MHz]
     'survey_numax':     800.,               # top of the survey band [MHz]
     'dnu':              0.390,              # channel width [MHz]
-    'Sarea':            31e3*(D2RAD)**2.,   # survey area [rad^2]
+    'Sarea':            31e3*(DEG_TO_RAD)**2.,   # survey area [rad^2]
     'n(x)': os.path.join(os.path.dirname(__file__), 'data', 'nx_CHIME_800.dat'),
     }
 CHIME.update(SURVEY)

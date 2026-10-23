@@ -13,7 +13,7 @@ import pytest
 
 import radiofisher as rf
 from radiofisher import baofisher as bf
-from radiofisher.units import HRS_MHZ
+from radiofisher.units import HOUR_IN_MHZ_INVERSE
 
 DATA = Path(__file__).parent / "data"
 REFERENCE = json.loads((DATA / "reference_6348429.json").read_text())
@@ -29,7 +29,7 @@ def inputs():
     cosmo = rf.load_power_spectrum(copy.deepcopy(rf.chime.cosmo), str(DATA / "pk_planck2018.dat"))
     fns = rf.background_evolution_splines(cosmo)
     expt = copy.deepcopy(rf.chime.CHIME)
-    expt["ttot"] = 8760.0 * HRS_MHZ
+    expt["ttot"] = 8760.0 * HOUR_IN_MHZ_INVERSE
     return cosmo, expt, fns
 
 
@@ -44,7 +44,9 @@ def test_fisher_matches_the_uncut_code(inputs, small_grid, label, pres):
     cosmo, expt, fns = inputs
     F, names = rf.fisher(ZMIN, ZMAX, cosmo, dict(expt, P_res=pres), fns)
     ref = REFERENCE[label]
-    assert names == ref["names"]
+    expected_names = list(ref["names"])
+    expected_names[3] = "s_NL"  # the receipt stores the same variance row under its former name
+    assert names == expected_names
     np.testing.assert_allclose(F, np.array(ref["F"]), rtol=1e-8, atol=0)
 
 
@@ -62,7 +64,9 @@ def test_integrands_match_the_uncut_code(inputs, small_grid):
     c, e, *_ = rf.prepare_bin(ZMIN, ZMAX, cosmo, dict(expt, P_res=shelf), fns)
     ref = REFERENCE["integrands"]
     D, names = rf.fisher_integrands(np.array(ref["k"]), np.array(ref["u"]), c, e)
-    assert names == ref["names"]
+    expected_names = list(ref["names"])
+    expected_names[3] = "s_NL"  # the receipt stores the same variance row under its former name
+    assert names == expected_names
     np.testing.assert_allclose(np.asarray(D), np.array(ref["D"]), rtol=1e-8, atol=1e-300)
 
 
@@ -99,3 +103,51 @@ def test_only_the_cylinder_is_supported(inputs):
     c, e, *_ = rf.prepare_bin(ZMIN, ZMAX, cosmo, expt, fns)
     with pytest.raises(ValueError):
         rf.Cnoise(np.ones((1, 1)), np.ones((1, 1)), c, dict(e, mode="dish"))
+
+
+def test_paired_nodes_match_cartesian_grid(inputs):
+    cosmo, expt, fns = inputs
+    c, e, *_ = rf.prepare_bin(ZMIN, ZMAX, cosmo, dict(expt, P_res=shelf), fns)
+    k, mu = np.array([0.04, 0.09, 0.15]), np.array([0.0, 0.3, 0.7, 1.0])
+    grid, names = rf.fisher_integrands(k, mu, c, e)
+    kk, mm = np.meshgrid(k, mu)
+    paired, paired_names = rf.fisher_integrands(kk.ravel(), mm.ravel(), c, e, paired=True)
+    assert paired_names == names
+    np.testing.assert_array_equal(paired, np.asarray(grid).reshape(len(names), -1))
+    scalar, _ = rf.fisher_integrands(k[0], mu[1], c, e, paired=True)
+    np.testing.assert_array_equal(np.asarray(scalar)[:, 0], np.asarray(grid)[:, 1, 0])
+
+
+def test_s_nl_is_the_damping_variance_derivative(inputs):
+    cosmo, expt, fns = inputs
+    c, e, *_ = rf.prepare_bin(ZMIN, ZMAX, cosmo, expt, fns)
+    k, mu = np.array([0.04, 0.09]), np.array([0.3, 0.7])
+    derivs, names = rf.fisher_integrands(k, mu, c, e)
+    kk, mm = np.meshgrid(k, mu)
+    q, y = c['r'] * kk * np.sqrt(1 - mm**2), c['rnu'] * kk * mm
+    step = 1e-3  # perturb the variance, not the damping length
+    high = dict(c, sigma_nl=np.sqrt(c['sigma_nl']**2 + step))
+    low = dict(c, sigma_nl=np.sqrt(c['sigma_nl']**2 - step))
+    total = rf.Csignal(q, y, c, e) + rf.Cnoise(q, y, c, e) + rf.Cfg(q, y, c, e)
+    numeric = (rf.Csignal(q, y, high, e) - rf.Csignal(q, y, low, e)) / (2 * step * total)
+    np.testing.assert_allclose(derivs[names.index('s_NL')], numeric, rtol=1e-8)
+
+
+def test_simpson_grid_integrates_a_separable_polynomial():
+    k = np.linspace(0, 2, 7)
+    mu = np.linspace(-1, 1, 9)
+    integrand = mu[:, None]**2 * k[None, :]**2
+    assert bf.integrate_grid(integrand, k, mu) == pytest.approx(16 / 9)
+
+
+def test_bao_derivative_grid_entirely_below_cutoff():
+    k = np.linspace(0.001, 0.02, 7)
+    derivative = bf.fbao_derivative(lambda nodes: nodes**2, k)
+    np.testing.assert_array_equal(derivative(k), 0)
+
+
+@pytest.mark.parametrize("bounds", [(1.3, 1.2), (1.2, 1.2), (-1, 1), (0, np.nan)])
+def test_invalid_redshift_bin_is_refused(inputs, bounds):
+    cosmo, expt, fns = inputs
+    with pytest.raises(ValueError, match="redshift bounds"):
+        rf.prepare_bin(*bounds, cosmo, expt, fns)

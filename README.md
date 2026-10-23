@@ -14,7 +14,7 @@ DTV power each 6 MHz channel can tolerate.
 
 For one redshift bin, `fisher()` returns the Fisher matrix of twelve parameters:
 the BAO amplitude `A`, the HI bias `b_HI`, the brightness temperature `Tb`, the damping
-variance `s_NL = sigma_NL^2` (legacy matrix label `sigma_NL`), `sigma8tot`, `n_s`, the growth rate `f`, the two dilations `aperp` and
+variance `s_NL = sigma_nl^2` (Mpc squared), `sigma8tot`, `n_s`, the growth rate `f`, the two dilations `aperp` and
 `apar`, `fs8`, `bs8` and the power amplitude `pk`. Each element is
 
     F_ij = Vfac * Int Int k^2 d_i d_j dk dmu,   d_i = (d ln C_S / d theta_i) * C_S / C_tot
@@ -51,11 +51,11 @@ in this repository under `tests/data/`; it is not installed with the library.
 python - <<'PY'
 import copy
 import radiofisher as rf
-from radiofisher.units import HRS_MHZ
+from radiofisher.units import HOUR_IN_MHZ_INVERSE
 
 cosmo = rf.load_power_spectrum(copy.deepcopy(rf.chime.cosmo), "tests/data/pk_planck2018.dat")
 fns = rf.background_evolution_splines(cosmo)
-expt = dict(rf.chime.CHIME, ttot=8760 * HRS_MHZ, P_res=0.01)
+expt = dict(rf.chime.CHIME, ttot=8760 * HOUR_IN_MHZ_INVERSE, P_res=0.01)
 F, names = rf.fisher(1.20, 1.25, cosmo, expt, fns)
 print(F.shape, names[-1])
 PY
@@ -76,24 +76,40 @@ P in Mpc^3). RFIsher ships the Planck 2018 table and checks it against the cosmo
 `fisher_integrands()` at its own quadrature nodes. RFIsher does this: RadioFisher's
 Simpson grid is not accurate enough for the bias row.
 
+## Units and conventions
+
+`src/radiofisher/units.py` owns the shared constants. `DEG_TO_RAD` uses
+Python's `math.pi`; `HOUR_IN_MHZ_INVERSE = 3600 * 1_000_000` is an exact unit
+conversion. Python module constants serve this purpose without macros.
+`FORECAST_LIGHT_SPEED_KM_S = 300_000` and `NU21_MHZ = 1420.406` are the
+CHIME Overview forecast conventions. The baseline-density table also uses
+the rounded speed of light, so replacing it with the SI value would require
+a consistent new model and regenerated inputs.
+
+`instrument.py` supplies wavelength, effective collecting area and mode cuts
+for both RadioFisher's noise and RFIsher's residual. `fisher_integrands` accepts
+`paired=True` for pointwise batches; its default evaluates a Cartesian grid.
+The Simpson integrator evaluates the angular axis in NumPy arrays. Independent
+parameter-pair loops keep memory bounded.
+
 ## Files
 
 | File | Contents |
 |---|---|
-| `radiofisher/baofisher.py` | the forecast: inputs, background, signal and noise, integrands, `fisher()` |
-| `radiofisher/chime.py` | CHIME and the Planck 2018 cosmology, as in the CHIME Overview |
-| `radiofisher/castorina.py` | the HI bias fit of Castorina & Villaescusa-Navarro (2017) |
-| `radiofisher/data/nx_CHIME_800.dat` | CHIME's as-built baseline density n(u) |
+| `src/radiofisher/baofisher.py` | the forecast: inputs, background, signal and noise, integrands, `fisher()` |
+| `src/radiofisher/units.py`, `instrument.py` | shared numerical conventions and instrument geometry |
+| `src/radiofisher/chime.py` | CHIME and the Planck 2018 cosmology, as in the CHIME Overview |
+| `src/radiofisher/castorina.py` | the HI bias fit of Castorina & Villaescusa-Navarro (2017) |
+| `src/radiofisher/data/nx_CHIME_800.dat` | CHIME's as-built baseline density n(u) |
 | `tools/generate_call_graph.py` | draws the call graph above |
 
-## What was removed
+## Scope
 
 Everything off this path: the other telescopes and survey modes, galaxy surveys,
 modified gravity, neutrino and non-Gaussianity parameters, CAMB execution, the
 redshift-binning and plotting helpers, and the CHIME Overview's multi-bin combination.
-Commit 6348429 is the last version with all of it. The tests check that the cut code
-reproduces that version's Fisher matrices: exactly with the numpy and scipy they were
-recorded with, and to about 1e-9 with other builds.
+Commit 6348429 is the last version with all of it. The tests check the numerical matrices against that version to 1e-8 relative.
+The reference receipt is unchanged; its fourth row is compared with `s_NL`.
 
 ## Tests
 
