@@ -34,7 +34,7 @@ def arrow(x1, y1, x2, y2, col=INK, mk="a", label=None, lx=None, ly=None):
     return out
 
 
-W, H = 1180, 1030
+W, H = 1180, 1110
 s = [(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-family="DejaVu Sans, sans-serif" role="img" '
      'aria-label="RadioFisher call graph: inputs, fisher(), the integrands and where the residual row is added">'),
      ("<defs>"
@@ -42,7 +42,7 @@ s = [(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-famil
      f'<marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="{MODEL}"/></marker>'
      "</defs>"), f'<rect width="{W}" height="{H}" fill="{BG}"/>',
      text(24, 34, "RadioFisher: one redshift bin of a 21 cm BAO forecast", 19, INK, "600"),
-     text(24, 56, "Every function on the path RFIsher uses. A residual power enters in one place, the gold box.", 13)]
+     text(24, 56, "Main RadioFisher forecast path and the residual hook used by RFIsher (gold).", 13)]
 
 # inputs
 s.append(box(24, 76, 360, 118, "chime.py", ["cosmo: Planck 2018, sigma_nl = 7 Mpc", "CHIME: 4 cylinders x 256 feeds, T_sys = 55 K,",
@@ -60,7 +60,7 @@ s.append(text(42, 266, "fisher(zmin, zmax, cosmo, expt, cosmo_fns)", 16, INK, "6
 s.append(text(42, 286, "returns F (one row and column per parameter) and the parameter names", 12.5))
 
 s.append(box(44, 302, 1092, 96, "1  prepare_bin(zmin, zmax, cosmo, expt, cosmo_fns)",
-             ["band edges and centre z; bandwidth = nu_21 / (1 + zmin) - nu_21 / (1 + zmax)",
+             ["band edges and center z; bandwidth = nu_21 / (1 + zmin) - nu_21 / (1 + zmax)",
               "load_interferom_file: baseline density n(u);  omega_HI(z), bias_HI(z) (castorina.py), Tb(z)",
               "D(z), f(z), r(z), r_nu = c (1+z)^2 / H(z);  Vfac = pi V / (2 pi)^3;  k and mu grids;  fbao_derivative"]))
 s.append(arrow(590, 398, 590, 436))
@@ -69,30 +69,34 @@ s.append(arrow(590, 398, 590, 436))
 s.append(f'<rect x="44" y="438" width="1092" height="400" rx="8" fill="{BG}" stroke="{INK}" stroke-width="1.5"/>')
 s.append(text(58, 464, "2  fisher_integrands(k, mu, cosmo, expt)", 14.5, INK, "600", True))
 s.append(text(58, 484, "at every Fourier mode (k, mu) of the grid", 12.5))
-s.append(box(62, 498, 340, 118, "Csignal", ["C_S = T_b^2 (b + f mu^2)^2", "  x exp(-k^2 mu^2 s_NL)", "  x (1 + A fbao) D^2 pk_nobao / (r^2 r_nu)",
-                                            "the HI signal, carrying the BAO"]))
-s.append(box(420, 498, 340, 118, "Cnoise", ["T_sys^2 V / (n_pol t_tot dnu)  (Tsys_tot)", "x interferometer_response: 1 / n(u), channel",
-                                           "infinite below k_fg and above k_NL"]))
+s.append(box(62, 498, 340, 118, "Csignal (fiducial dilations)", ["C_S = T_b^2 (b + f mu^2)^2", "  x exp(-k^2 mu^2 s_NL)", "  x (1 + A fbao) D^2 pk_nobao / (r^2 r_nu)",
+                                            "HI signal; s_NL = sigma_nl^2 (Mpc^2)"]))
+s.append(box(420, 498, 340, 118, "Cnoise", ["T_sys^2 S_area / (n_pol t_tot nu_21)",
+                                           "x lambda^4 / [N_beam (A_eff theta_b)^2]",
+                                           "x interferometer_response(q, y)",
+                                           "cuts: low |k_par| and high |k|"]))
 s.append(box(778, 498, 340, 118, "Cfg", ["foreground power x epsilon_fg^2", "= 0 for CHIME here"]))
 s.append(box(62, 632, 1056, 40, "C_tot = C_S + C_N + C_FG", []))
 for x in (232, 590, 948):
     s.append(arrow(x, 616, x, 630))
 s.append(box(62, 690, 640, 132, "one row per parameter", ["d_i = (d ln C_S / d theta_i) x C_S / C_tot",
-                                                         "A, b_HI, T_b, s_NL, sigma_8, n_s, f, fs8, bs8, P(k)",
+                                                         "A, b_HI, Tb, s_NL, sigma8tot, n_s, f, fs8, bs8, pk",
                                                          "aperp, apar: the BAO shift term, through dfbao_dk",
                                                          "(logpk_derivative feeds the switched-off terms)"]))
 s.append(box(722, 690, 396, 132, "expt['P_res']  ->  row '_Pres'", ["d_res = dP(k, mu, C_N, C_S) / C_tot",
-                                                                   "the residual's projection; its column",
-                                                                   "gives the first-order bias.",
-                                                                   "It is never added to C_tot."], stroke=MODEL, sw=2.2, fill=MODEL_BG, tcol=MODEL))
+                                                                   "Integration gives the bias projection B.",
+                                                                   "Parameter bias = inverse(F_fit) B.",
+                                                                   "The residual stays outside C_tot."], stroke=MODEL, sw=2.2, fill=MODEL_BG, tcol=MODEL))
 s.append(arrow(400, 672, 400, 688))
 s.append(arrow(920, 672, 920, 688, MODEL, "b"))
 s.append(arrow(590, 838, 590, 860))
 
 s.append(box(44, 862, 1092, 78, "3  integrate_fisher_elements(derivs, k, mu)",
              ["F_ij = Vfac x Int Int k^2 d_i d_j dk dmu   (integrate_grid: Simpson rule over the grid)",
-              "RFIsher calls prepare_bin and fisher_integrands itself and integrates with converged Gauss-Legendre segments"]))
-s.append(text(24, 986, "Output: F with rows A, b_HI, T_b, s_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8, pk and, with a residual, _Pres.", 12.5, INK))
-s.append(text(24, 1008, "The clean block gives the uncertainties; the _Pres column gives the bias. Strip _Pres before inverting.", 12.5, INK))
+              "RFIsher replaces the BAO derivative and integrates paired=True batches with segmented Gauss-Legendre nodes"]))
+s.append(box(24, 972, 1132, 58, "Shared instrument.py helpers (RadioFisher and RFIsher)",
+             ["wavelength_m, collecting_area_m2, mode_limits: common wavelength, collecting area and mode cuts"]))
+s.append(text(24, 1056, "Output: F with rows A, b_HI, Tb, s_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8, pk and, with a residual, _Pres.", 12.5, INK))
+s.append(text(24, 1080, "Select the fitted parameter block F_fit; remove _Pres before inversion. Its cross-column is B, so bias = inverse(F_fit) B.", 12.5, INK))
 s.append("</svg>")
 (Path(__file__).resolve().parents[1] / "docs" / "radiofisher_functions.svg").write_text("\n".join(s) + "\n")
