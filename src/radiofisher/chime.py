@@ -5,7 +5,7 @@ cylinder geometry, T_sys = 55 K, 31,000 deg^2, one year, epsilon_fg = 0, the
 BAO-shift dilations only, and the as-built baseline density n(u).
 
 From S. Foreman's chime-update branch of RadioFisher (chime2021/
-experiments_CHIME.py); keys the forecast does not read are removed.
+experiments_CHIME.py), keeping only the keys the forecast reads.
 """
 import os
 

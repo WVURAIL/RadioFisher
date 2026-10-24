@@ -1,7 +1,7 @@
-"""The cut-down forecast reproduces RadioFisher 6348429 (before the cut), and the
+"""The forecast reproduces the full RadioFisher code at commit 6348429, and the
 residual hook behaves as documented.
 
-The reference was recorded with numpy 2.3.5 and scipy 1.18.0, where the cut code
+The reference was recorded with numpy 2.3.5 and scipy 1.18.0, where this code
 reproduces it exactly. Other numpy and scipy builds differ by about 1e-9 relative,
 so the comparisons allow 1e-8."""
 import copy
@@ -40,17 +40,17 @@ def small_grid(monkeypatch):
 
 
 @pytest.mark.parametrize("label,pres", [("scalar", 0.25), ("callable", shelf)])
-def test_fisher_matches_the_uncut_code(inputs, small_grid, label, pres):
+def test_fisher_matches_the_full_code(inputs, small_grid, label, pres):
     cosmo, expt, fns = inputs
     F, names = rf.fisher(ZMIN, ZMAX, cosmo, dict(expt, P_res=pres), fns)
     ref = REFERENCE[label]
     expected_names = list(ref["names"])
-    expected_names[3] = "s_NL"  # the receipt stores the same variance row under its former name
+    expected_names[3] = "s_NL"  # the reference file names this variance row sigma_NL
     assert names == expected_names
     np.testing.assert_allclose(F, np.array(ref["F"]), rtol=1e-8, atol=0)
 
 
-def test_bin_setup_matches_the_uncut_code(inputs):
+def test_bin_setup_matches_the_full_code(inputs):
     cosmo, expt, fns = inputs
     c, e, Vfac, kgrid, ugrid = rf.prepare_bin(ZMIN, ZMAX, cosmo, expt, fns)
     for key, value in REFERENCE["setup"].items():
@@ -59,13 +59,13 @@ def test_bin_setup_matches_the_uncut_code(inputs):
     assert Vfac > 0 and kgrid.size == bf.NSAMP_K and ugrid.size == bf.NSAMP_U
 
 
-def test_integrands_match_the_uncut_code(inputs, small_grid):
+def test_integrands_match_the_full_code(inputs, small_grid):
     cosmo, expt, fns = inputs
     c, e, *_ = rf.prepare_bin(ZMIN, ZMAX, cosmo, dict(expt, P_res=shelf), fns)
     ref = REFERENCE["integrands"]
     D, names = rf.fisher_integrands(np.array(ref["k"]), np.array(ref["u"]), c, e)
     expected_names = list(ref["names"])
-    expected_names[3] = "s_NL"  # the receipt stores the same variance row under its former name
+    expected_names[3] = "s_NL"  # the reference file names this variance row sigma_NL
     assert names == expected_names
     np.testing.assert_allclose(np.asarray(D), np.array(ref["D"]), rtol=1e-8, atol=1e-300)
 

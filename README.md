@@ -80,7 +80,7 @@ Simpson grid is not accurate enough for the bias row.
 
 `src/radiofisher/units.py` owns the shared constants. `DEG_TO_RAD` uses
 Python's `math.pi`; `HOUR_IN_MHZ_INVERSE = 3600 * 1_000_000` is an exact unit
-conversion. Python module constants serve this purpose without macros.
+conversion.
 `FORECAST_LIGHT_SPEED_KM_S = 300_000` and `NU21_MHZ = 1420.406` are the
 CHIME Overview forecast conventions. The baseline-density table also uses
 the rounded speed of light, so replacing it with the SI value would require
@@ -108,8 +108,9 @@ parameter-pair loops keep memory bounded.
 Everything off this path: the other telescopes and survey modes, galaxy surveys,
 modified gravity, neutrino and non-Gaussianity parameters, CAMB execution, the
 redshift-binning and plotting helpers, and the CHIME Overview's multi-bin combination.
-Commit 6348429 is the last version with all of it. The tests check the numerical matrices against that version to 1e-8 relative.
-The reference receipt is unchanged; its fourth row is compared with `s_NL`.
+The full code is at commit 6348429 of this repository. The tests compare the matrices with
+that commit's output (`tests/data/reference_6348429.json`) to 1e-8 relative. The reference
+file names the fourth row `sigma_NL`; it is the same variance as `s_NL`.
 
 ## Tests
 
@@ -133,5 +134,5 @@ copy in `tools/wvu_palette.py`. Update it with the template's
 `tools/export_plot_palette.py`. Blue denotes measurements; old gold provides
 contrast for model curves and small labels. Additional series use WVU accents
 and distinct markers or line styles where needed. Grayscale masks keep their
-binary meaning. Journal requirements take precedence; this palette does not
-change the numerical calculations or frozen records.
+binary meaning. Journal requirements take precedence. The palette affects
+figures only, not the numerical results.
