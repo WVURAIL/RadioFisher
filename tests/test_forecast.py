@@ -1,4 +1,4 @@
-"""The forecast reproduces the full RadioFisher code at commit 6348429, and the
+"""The forecast reproduces the full RadioFisher code at commit ae723f7, and the
 residual hook behaves as documented.
 
 The reference was recorded with numpy 2.3.5 and scipy 1.18.0, where this code
@@ -16,7 +16,7 @@ from radiofisher import baofisher as bf
 from radiofisher.units import HOUR_IN_MHZ_INVERSE
 
 DATA = Path(__file__).parent / "data"
-REFERENCE = json.loads((DATA / "reference_6348429.json").read_text())
+REFERENCE = json.loads((DATA / "reference_ae723f7.json").read_text())
 ZMIN, ZMAX = 1.20, 1.25
 
 
