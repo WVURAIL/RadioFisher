@@ -108,8 +108,8 @@ parameter-pair loops keep memory bounded.
 Everything off this path: the other telescopes and survey modes, galaxy surveys,
 modified gravity, neutrino and non-Gaussianity parameters, CAMB execution, the
 redshift-binning and plotting helpers, and the CHIME Overview's multi-bin combination.
-The full code is at commit 6348429 of this repository. The tests compare the matrices with
-that commit's output (`tests/data/reference_6348429.json`) to 1e-8 relative. The reference
+The full code is at commit ae723f7 of this repository. The tests compare the matrices with
+that commit's output (`tests/data/reference_ae723f7.json`) to 1e-8 relative. The reference
 file names the fourth row `sigma_NL`; it is the same variance as `s_NL`.
 
 ## Tests
