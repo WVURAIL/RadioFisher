@@ -68,26 +68,29 @@ def load_power_spectrum(cosmo, cachefile):
     return cosmo
 
 def spline_pk_nobao(k_in, pk_in, kref=(2.4e-2, 4.5e-1)):
+    """Separate the smooth power spectrum from the BAO wiggles.
+
+    First spline the broadband shape outside the wiggle region. Then
+    remove the remaining smooth trend from the ratio to form the BAO
+    template. Return interpolators for the smooth spectrum and template.
     """
-    Construct a smooth power spectrum with BAOs removed, and a corresponding
-    BAO template function, by using a two-stage splining process.
-    """
-    # Spline all (log-log) points except those in user-defined "wiggle region",
-    # and then get derivatives of result
+    # Fit the smooth background in log-log space, leaving out the requested
+    # wiggle region, then differentiate that spline.
     idxs = np.where(np.logical_or(k_in <= kref[0], k_in >= kref[1]))
     _pk_smooth = scipy.interpolate.UnivariateSpline( np.log(k_in[idxs]),
                                                     np.log(pk_in[idxs]), k=3, s=0 )
     pk_smooth = lambda x: np.exp(_pk_smooth(np.log(x)))
 
-    # Construct "wiggles" function using spline as a reference, then spline it
-    # and find its 2nd derivative
+    # Divide out the smooth reference to isolate the wiggles. Fit this
+    # ratio with a spline and take its second derivative.
     fwiggle = scipy.interpolate.UnivariateSpline(k_in, pk_in / pk_smooth(k_in), k=3, s=0)
     second_derivative = fwiggle.derivative(2)(k_in)
     d2 = scipy.interpolate.UnivariateSpline(k_in, second_derivative, k=3, s=1.0)
     # (s=1 to get sensible smoothing)
 
-    # Find maxima and minima of the gradient (zeros of 2nd deriv.), then put a
-    # low-order spline through zeros to subtract smooth trend from wiggles fn.
+    # Zeros of the second derivative locate extrema of the gradient.
+    # Fit a low-order spline through these points to estimate the smooth
+    # trend still present in the wiggle ratio.
     wzeros = d2.roots()
     wzeros = wzeros[np.where(np.logical_and(wzeros >= kref[0], wzeros <= kref[1]))]
     wzeros = np.concatenate((wzeros, [kref[1],]))
@@ -159,7 +162,7 @@ def background_evolution_splines(cosmo, zmax=10., nsamples=500):
         _r = (FORECAST_LIGHT_SPEED_KM_S/H0) * r_c
 
     # Integrate linear growth rate to find linear growth factor, D(z)
-    # N.B. D(z=0) = 1.
+    # Normalize the growth factor so D(z=0) = 1.
     a = 1. / (1. + _z)
     _f = fgrowth(cosmo, _z)
     _D = np.concatenate( ([0.,], scipy.integrate.cumulative_trapezoid(_f, x=np.log(a))) )
@@ -202,10 +205,10 @@ def Tb(z, cosmo):
 ################################################################################
 
 def inverse_interpfn(f):
-    """
-    Invert an array, replacing all 1/0 with 0. This is for use on arrays that
-    have been produced by interpolation, where some of the elements were
-    outside the interpolation range.
+    """Take the reciprocal of an interpolated array, keeping zero entries at zero.
+
+    Interpolation uses zero outside its input range. Preserving those
+    entries avoids treating unsupported points as infinite values.
     """
     values = np.asarray(f, dtype=float)
     return np.divide(1., values, out=np.zeros_like(values), where=values != 0)
@@ -260,8 +263,8 @@ def fbao_derivative(fbao, kgrid, kref=(3e-2, 4.5e-1)):
     dk = 1e-7
     dfbao_dk = (fbao(kgrid + 0.5*dk) - fbao(kgrid - 0.5*dk)) / dk
 
-    # Deal with sharp edge effect because of bracket over which fbao(k) was
-    # defined (zero derivative near to edge)
+    # Set the derivative to zero near the template boundaries, where the
+    # finite input range would otherwise introduce a sharp edge.
     idxs = np.where(kgrid <= kref[0])
     if len(idxs[0]) > 0:
         dfbao_dk[idxs] = 0.
@@ -310,10 +313,10 @@ def Tsys_tot(z, expt):
     return expt['Tsys_tot(z)'](z)
 
 def interferometer_response(q, y, cosmo, expt):
-    """
-    Inverse baseline density and the channel response along the line of sight,
-    1 / n(u) * exp[(k_par / sigma_kpar)^2], for the noise of a cylinder
-    interferometer.
+    """Compute the inverse baseline density and radial channel response.
+
+    The cylinder-interferometer noise uses
+    (1 / n(u)) * exp[(k_par / sigma_kpar)^2].
     """
     c = cosmo
     kperp = q / (c['aperp']*c['r'])
@@ -401,9 +404,9 @@ def Cfg(q, y, cosmo, expt):
     """
     fg = cosmo['foregrounds']
     n_fg = len(fg['A']) # No. of foreground components
-    nu = expt['nu_line'] / (1. + cosmo['z']) # Centre freq. of redshift bin
+    nu = expt['nu_line'] / (1. + cosmo['z']) # Center freq. of redshift bin
 
-    # Replace zeros in q to prevent div/0
+    # Use a nonzero placeholder while evaluating the powers of q.
     _q = q.copy()
     _q[np.where(q == 0.)] = 1e-100 # Set to a very small (but non-zero) value
 
@@ -412,7 +415,7 @@ def Cfg(q, y, cosmo, expt):
     for i in range(n_fg):
         Cx = fg['A'][i] * (fg['l_p'] / (2.*np.pi*_q))**fg['nx'][i] \
                         * (nu / fg['nu_p'])**fg['mx'][i]
-        Cx[np.where(q == 0.)] = INF_NOISE # Mask values where q is zero
+        Cx[np.where(q == 0.)] = INF_NOISE # Restore the zero-q mask after evaluating the foreground terms.
         Cfg += Cx
 
     # Scale by FG subtraction residual amplitude and return
@@ -424,14 +427,17 @@ def Cfg(q, y, cosmo, expt):
 ################################################################################
 
 def fisher_integrands(kgrid, ugrid, cosmo, expt, *, paired=False):
-    """
-    Integrands over (k, mu) for the Fisher matrix, one per parameter, in the
-    order ( A, b_HI, Tb, s_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8,
-    pk [, _Pres] ). Each is d ln C_S / d theta * C_S / C_tot. Which dilation
-    terms enter aperp and apar is set by ``expt['use']``.
-    s_NL is damping variance in Mpc squared, with log-derivative -k**2 * mu**2.
-    With paired=True, broadcast kgrid and ugrid pointwise instead of constructing
-    their Cartesian product; this supports batches of segmented quadrature nodes.
+    """Form one Fisher-integrand row per parameter on the (k, mu) grid.
+
+    Each row is d ln C_S / d theta * C_S / C_tot. The parameter order is
+    (A, b_HI, Tb, s_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8,
+    pk [, _Pres]). expt['use'] selects the dilation terms in aperp and
+    apar. s_NL is a damping variance in Mpc squared, with log-derivative
+    -k**2 * mu**2.
+
+    By default, form the Cartesian product of kgrid and ugrid. With
+    paired=True, broadcast them pointwise; this lets segmented quadrature
+    evaluate batches of nodes without constructing a full grid.
     """
     c = cosmo
     use = expt['use']
@@ -567,7 +573,7 @@ def prepare_bin(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0):
         raise ValueError("redshift bounds must satisfy 0 <= zmin < zmax")
     if not np.isfinite([kmin, kmax]).all() or not 0 < kmin < kmax:
         raise ValueError("wavenumber bounds must satisfy 0 < kmin < kmax")
-    # Copy, to make sure we don't modify input expt or cosmo
+    # Work on copies so preparing this bin does not change the caller's inputs.
     cosmo = copy.deepcopy(cosmo)
     expt = copy.deepcopy(expt)
     HH, rr, DD, ff = cosmo_fns
