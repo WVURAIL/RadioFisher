@@ -1,4 +1,4 @@
-"""Draw docs/radiofisher_functions.svg: the forecast at function level, and where a residual enters."""
+"""Draw docs/radiofisher_functions.svg, the function-level diagram of the forecast and its residual hook."""
 from pathlib import Path
 
 import wvu_palette as wvu

@@ -1,9 +1,11 @@
 """
-HI bias b_HI(z) of Castorina & Villaescusa-Navarro (2017), arXiv:1609.05157,
-Eqs. 4-7 with alpha = 1 and M_min = 5e9 Msun/h (fit to the DLA bias at
-z = 2.3), as tabulated by E. Castorina for the PUMANoise code
-(https://github.com/slosar/PUMANoise, April 2019 update). Columns: z, b_HI,
-shot noise. Only the bias is used.
+HI bias b_HI(z) of Castorina & Villaescusa-Navarro (2017), arXiv:1609.05157.
+
+The bias follows their Equations (4) to (7) with alpha = 1 and
+M_min = 5e9 Msun/h, the value that fits the DLA bias at z = 2.3. The table
+was computed by E. Castorina for the PUMANoise code
+(https://github.com/slosar/PUMANoise, April 2019 update) and has the columns
+z, b_HI, and shot noise. Only the bias is used.
 """
 import io
 
