@@ -71,7 +71,7 @@ def test_integrands_match_the_full_code(inputs, small_grid):
 
 
 def test_residual_never_enters_the_covariance(inputs, small_grid):
-    """The '_Pres' row is the only change: every other element is the clean forecast."""
+    """The residual changes only the '_Pres' row and column of F."""
     cosmo, expt, fns = inputs
     clean, names = rf.fisher(ZMIN, ZMAX, cosmo, expt, fns)
     dirty, dnames = rf.fisher(ZMIN, ZMAX, cosmo, dict(expt, P_res=shelf), fns)
@@ -125,7 +125,7 @@ def test_s_nl_is_the_damping_variance_derivative(inputs):
     derivs, names = rf.fisher_integrands(k, mu, c, e)
     kk, mm = np.meshgrid(k, mu)
     q, y = c['r'] * kk * np.sqrt(1 - mm**2), c['rnu'] * kk * mm
-    step = 1e-3  # perturb the variance, not the damping length
+    step = 1e-3  # step in the damping variance sigma_nl^2
     high = dict(c, sigma_nl=np.sqrt(c['sigma_nl']**2 + step))
     low = dict(c, sigma_nl=np.sqrt(c['sigma_nl']**2 - step))
     total = rf.Csignal(q, y, c, e) + rf.Cnoise(q, y, c, e) + rf.Cfg(q, y, c, e)

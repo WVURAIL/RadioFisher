@@ -1,7 +1,8 @@
 """Forecast 21 cm BAO measurements with a cylinder interferometer.
 
-This package retains the RadioFisher path used for that calculation.
-See baofisher.py for the call sequence and chime.py for the CHIME inputs.
+This package is the part of RadioFisher (Bull et al. 2015) used by the CHIME
+Overview forecast. See baofisher.py for the call sequence and chime.py for the
+CHIME inputs.
 """
 __version__ = "1.0.0"
 

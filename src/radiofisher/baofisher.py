@@ -1,11 +1,12 @@
 """
 Fisher forecast for 21 cm intensity mapping with a cylinder interferometer.
 
-This is the part of RadioFisher (Bull et al. 2015, ApJ 803, 21) that the CHIME
-Overview forecast (CHIME Collaboration 2022, ApJS 261, 29, Appendix A) uses,
-cut down to one path: one redshift bin, the Kaiser redshift-space signal, the
-cylinder-interferometer noise, the BAO-shift dilations, and one hook for a
-power that the model does not include (``expt['P_res']``).
+This module is the part of RadioFisher (Bull et al. 2015, ApJ 803, 21) used
+by the CHIME Overview forecast (CHIME Collaboration 2022, ApJS 261, 29,
+Appendix A). Only one path is kept: one redshift bin, the Kaiser
+redshift-space signal, the cylinder-interferometer noise, and the BAO-shift
+dilations. One hook, ``expt['P_res']``, adds a power that is not part of the
+model.
 
     fisher(zmin, zmax, cosmo, expt, cosmo_fns)
       prepare_bin                  bin center, distances, HI signal amplitude, grids
@@ -16,9 +17,10 @@ power that the model does not include (``expt['P_res']``).
         expt['P_res']              extra row '_Pres' = dP / C_tot (enters only here)
       integrate_fisher_elements    Simpson rule over (k, mu)
 
-C_tot = C_S + C_N + C_FG never contains the residual, so the Fisher matrix and
+The residual never enters C_tot = C_S + C_N + C_FG, so the Fisher matrix and
 its uncertainties are those of a clean survey. The '_Pres' row and column hold
-the first-order bias the residual causes. Strip them before inverting.
+the first-order bias caused by the residual, and they must be removed before F
+is inverted.
 
 (Phil Bull & Pedro G. Ferreira, 2013--2014; cut to the CHIME path in 2026)
 """
@@ -41,7 +43,7 @@ EXP_OVERFLOW_VAL = 250.  # cap on exponents before np.exp() overflows
 
 
 ################################################################################
-# Inputs: baseline density and linear power spectrum
+# Baseline density and linear power spectrum
 ################################################################################
 
 def load_interferom_file(fname):
@@ -57,9 +59,9 @@ def load_power_spectrum(cosmo, cachefile):
     """
     Attach the smooth power spectrum and the BAO wiggle template to ``cosmo``.
 
-    ``cachefile`` is a linear matter power spectrum table at z = 0: columns
-    k [Mpc^-1] and P(k) [Mpc^3], header lines starting with '#'. Its k range
-    must extend past the largest k of the forecast.
+    ``cachefile`` is a table of the linear matter power spectrum at z = 0, with
+    columns k [Mpc^-1] and P(k) [Mpc^3] and header lines that start with '#'.
+    Its k range must extend past the largest k of the forecast.
     """
     k_in, pk_in = np.genfromtxt(cachefile).T
     cosmo['pk_nobao'], cosmo['fbao'] = spline_pk_nobao(k_in, pk_in)
@@ -68,36 +70,41 @@ def load_power_spectrum(cosmo, cachefile):
     return cosmo
 
 def spline_pk_nobao(k_in, pk_in, kref=(2.4e-2, 4.5e-1)):
-    """Separate the smooth power spectrum from the BAO wiggles.
+    """Split the linear power spectrum into a smooth part and a BAO template.
 
-    First spline the broadband shape outside the wiggle region. Then
-    remove the remaining smooth trend from the ratio to form the BAO
-    template. Return interpolators for the smooth spectrum and template.
+    The broadband shape is splined in log-log space through the points below
+    kref[0] and above kref[1]. In the wiggle region, the ratio of P(k) to this
+    spline still has a smooth trend, and the smooth part P_nobao(k) is the
+    spline times that trend. The BAO template is
+    fbao(k) = (P(k) - P_nobao(k)) / P_nobao(k).
+
+    Returns interpolators for P_nobao(k) [Mpc^3] and fbao(k), both zero for k
+    past the ends of the input table.
     """
-    # Fit the smooth background in log-log space, leaving out the requested
-    # wiggle region, then differentiate that spline.
+    # The broadband shape is splined in log-log space through the points off
+    # the wiggle region.
     idxs = np.where(np.logical_or(k_in <= kref[0], k_in >= kref[1]))
     _pk_smooth = scipy.interpolate.UnivariateSpline( np.log(k_in[idxs]),
                                                     np.log(pk_in[idxs]), k=3, s=0 )
     pk_smooth = lambda x: np.exp(_pk_smooth(np.log(x)))
 
-    # Divide out the smooth reference to isolate the wiggles. Fit this
-    # ratio with a spline and take its second derivative.
+    # Dividing P(k) by the broadband spline leaves the wiggles. This ratio is
+    # splined, and its second derivative is splined again with smoothing.
     fwiggle = scipy.interpolate.UnivariateSpline(k_in, pk_in / pk_smooth(k_in), k=3, s=0)
     second_derivative = fwiggle.derivative(2)(k_in)
     d2 = scipy.interpolate.UnivariateSpline(k_in, second_derivative, k=3, s=1.0)
     # (s=1 to get sensible smoothing)
 
-    # Zeros of the second derivative locate extrema of the gradient.
-    # Fit a low-order spline through these points to estimate the smooth
-    # trend still present in the wiggle ratio.
+    # The zeros of the second derivative locate the extrema of the gradient. A
+    # spline through the ratio at these zeros and at kref[1] estimates the
+    # smooth trend left in the wiggle region.
     wzeros = d2.roots()
     wzeros = wzeros[np.where(np.logical_and(wzeros >= kref[0], wzeros <= kref[1]))]
     wzeros = np.concatenate((wzeros, [kref[1],]))
     wtrend = scipy.interpolate.UnivariateSpline(wzeros, fwiggle(wzeros), k=3, s=0)
 
-    # Construct smooth "no-bao" function by summing the original splined function and
-    # the wiggles trend function
+    # In the wiggle region, the smooth "no-bao" spectrum is the broadband spline
+    # multiplied by the trend. The template fk is the fractional residual.
     idxs = np.where(np.logical_and(k_in > kref[0], k_in < kref[1]))
     pk_nobao = pk_smooth(k_in)
     pk_nobao[idxs] *= wtrend(k_in[idxs])
@@ -162,7 +169,7 @@ def background_evolution_splines(cosmo, zmax=10., nsamples=500):
         _r = (FORECAST_LIGHT_SPEED_KM_S/H0) * r_c
 
     # Integrate linear growth rate to find linear growth factor, D(z)
-    # Normalize the growth factor so D(z=0) = 1.
+    # (ln D is integrated from z = 0, so D(z=0) = 1)
     a = 1. / (1. + _z)
     _f = fgrowth(cosmo, _z)
     _D = np.concatenate( ([0.,], scipy.integrate.cumulative_trapezoid(_f, x=np.log(a))) )
@@ -205,10 +212,10 @@ def Tb(z, cosmo):
 ################################################################################
 
 def inverse_interpfn(f):
-    """Take the reciprocal of an interpolated array, keeping zero entries at zero.
+    """Return 1 / f, with the zero entries of f kept at zero.
 
-    Interpolation uses zero outside its input range. Preserving those
-    entries avoids treating unsupported points as infinite values.
+    This is used on arrays from an interpolator that returns zero past the
+    ends of its input range, where 1 / 0 would give infinite values.
     """
     values = np.asarray(f, dtype=float)
     return np.divide(1., values, out=np.zeros_like(values), where=values != 0)
@@ -229,15 +236,15 @@ def logpk_derivative(pk, kgrid):
     """
     # Calculate dlog(P(k))/dk using central difference technique
     # (Sets lowest-k values to zero since P(k) not defined there)
-    # Suppress expected boundary divisions locally without changing NumPy's
-    # process-global floating-point error policy.
+    # Divisions by zero are expected at the edge of the P(k) range. Their
+    # warnings are silenced with np.errstate for this block only.
     dk = 1e-7
     with np.errstate(divide='ignore', invalid='ignore'):
         dP = pk(kgrid + 0.5*dk) / pk(kgrid - 0.5*dk)
-    # Set invalid and non-positive ratios to 1 (sets deriv. to zero). These
-    # values arise when a sample straddles the edge of the P(k) input range
-    # (pk=0 on one side); logging them would otherwise produce infinities that
-    # poison every Fisher row that adds an alpha-shift contribution.
+    # Invalid and non-positive ratios are set to 1, which sets the derivative
+    # to zero. These ratios occur when a sample straddles the edge of the P(k)
+    # input range, where pk = 0 on one side. Their log is infinite and would
+    # enter every Fisher row with an alpha-shift term.
     dP[(~np.isfinite(dP)) | (dP <= 0.)] = 1.
     dlogpk_dk = np.log(dP) / dk
     return dlogpk_dk
@@ -263,8 +270,8 @@ def fbao_derivative(fbao, kgrid, kref=(3e-2, 4.5e-1)):
     dk = 1e-7
     dfbao_dk = (fbao(kgrid + 0.5*dk) - fbao(kgrid - 0.5*dk)) / dk
 
-    # Set the derivative to zero near the template boundaries, where the
-    # finite input range would otherwise introduce a sharp edge.
+    # The derivative is set to zero for k <= kref[0] and at the next grid
+    # point, which removes the sharp edge at the low-k end of the template.
     idxs = np.where(kgrid <= kref[0])
     if len(idxs[0]) > 0:
         dfbao_dk[idxs] = 0.
@@ -303,7 +310,7 @@ def integrate_fisher_elements(derivs, kgrid, ugrid):
 
 
 ################################################################################
-# Covariances: signal, noise, foregrounds
+# Signal, noise and foreground covariances
 ################################################################################
 
 def Tsys_tot(z, expt):
@@ -313,10 +320,10 @@ def Tsys_tot(z, expt):
     return expt['Tsys_tot(z)'](z)
 
 def interferometer_response(q, y, cosmo, expt):
-    """Compute the inverse baseline density and radial channel response.
+    """Return the cylinder noise factor (1 / n(u)) * exp[(k_par / sigma_kpar)^2].
 
-    The cylinder-interferometer noise uses
-    (1 / n(u)) * exp[(k_par / sigma_kpar)^2].
+    n(u) is the baseline density, and the exponential is the inverse square of
+    the Gaussian channel response along the line of sight.
     """
     c = cosmo
     kperp = q / (c['aperp']*c['r'])
@@ -337,9 +344,9 @@ def interferometer_response(q, y, cosmo, expt):
 
 def Cnoise(q, y, cosmo, expt):
     """
-    Thermal noise power C_N of a cylinder interferometer [mK^2], with modes
-    below the foreground cut k_fg and above the nonlinear scale k_NL set to
-    infinite noise.
+    Thermal noise power C_N of a cylinder interferometer [mK^2]. Modes with
+    |k_par| below the foreground cut k_fg or |k| above the nonlinear scale k_NL
+    are set to infinite noise (INF_NOISE).
     """
     if expt['mode'] != 'icyl':
         raise ValueError("only the cylinder interferometer ('icyl') is supported")
@@ -350,15 +357,16 @@ def Cnoise(q, y, cosmo, expt):
     nu = expt['nu_line'] / (1. + c['z'])
     wavelength = wavelength_m(nu)
 
-    # Number of receiver polarization channels (default is two) and efficiency
+    # Number of receiver polarization channels (default is two)
     npol = expt['npol'] if 'npol' in list(expt.keys()) else 2.
 
-    # Radiometer noise per unit survey volume
+    # Radiometer noise, T_sys^2 S_area / (n_pol t_tot nu_line)
     Vsurvey = expt['Sarea'] * expt['dnutot'] / expt['nu_line']
     Tsys = Tsys_tot(c['z'], expt)
     noise = Tsys**2. * Vsurvey / (npol * expt['ttot'] * expt['dnutot'])
 
-    # Cylinder: collecting area per receiver and a ~90 deg x l/D field of view
+    # Collecting area per receiver. The cylinder field of view is about
+    # 90 deg x lambda/D, and theta_b is the square root of that solid angle.
     Aeff = collecting_area_m2(expt)
     theta_b = np.sqrt( 0.5 * np.pi * wavelength / expt['Ddish'] )
     noise *= interferometer_response(q, y, cosmo, expt)
@@ -380,8 +388,9 @@ def Csignal(q, y, cosmo, expt):
     c = cosmo
 
     # Wavenumber and mu = cos(theta)
-    # aperp = D_M(fid)/D_M, apar = H/H(fid), consistent with the
-    # volume Jacobian below and with fisher_integrands.
+    # The dilations are aperp = D_M(fid)/D_M and apar = H/H(fid). The volume
+    # factor aperp^2 apar below and the derivatives in fisher_integrands use
+    # the same convention.
     kperp = c['aperp'] * q / c['r']
     kpar = c['apar'] * y / c['rnu']
     k = np.sqrt(kpar**2. + kperp**2.)
@@ -406,7 +415,7 @@ def Cfg(q, y, cosmo, expt):
     n_fg = len(fg['A']) # No. of foreground components
     nu = expt['nu_line'] / (1. + cosmo['z']) # Center freq. of redshift bin
 
-    # Use a nonzero placeholder while evaluating the powers of q.
+    # Replace zeros in q to prevent division by zero
     _q = q.copy()
     _q[np.where(q == 0.)] = 1e-100 # Set to a very small (but non-zero) value
 
@@ -415,7 +424,7 @@ def Cfg(q, y, cosmo, expt):
     for i in range(n_fg):
         Cx = fg['A'][i] * (fg['l_p'] / (2.*np.pi*_q))**fg['nx'][i] \
                         * (nu / fg['nu_p'])**fg['mx'][i]
-        Cx[np.where(q == 0.)] = INF_NOISE # Restore the zero-q mask after evaluating the foreground terms.
+        Cx[np.where(q == 0.)] = INF_NOISE # Mask values where q is zero
         Cfg += Cx
 
     # Scale by FG subtraction residual amplitude and return
@@ -427,17 +436,19 @@ def Cfg(q, y, cosmo, expt):
 ################################################################################
 
 def fisher_integrands(kgrid, ugrid, cosmo, expt, *, paired=False):
-    """Form one Fisher-integrand row per parameter on the (k, mu) grid.
+    """Return the Fisher integrands, one row per parameter, on the (k, mu) grid.
 
-    Each row is d ln C_S / d theta * C_S / C_tot. The parameter order is
-    (A, b_HI, Tb, s_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8,
-    pk [, _Pres]). expt['use'] selects the dilation terms in aperp and
-    apar. s_NL is a damping variance in Mpc squared, with log-derivative
-    -k**2 * mu**2.
+    Each row is d ln C_S / d theta * C_S / C_tot. The parameters are, in
+    order, A, b_HI, Tb, s_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8, pk
+    and, when expt['P_res'] is set, _Pres. The dilation terms in aperp and
+    apar are selected by expt['use']. s_NL is a damping variance in Mpc
+    squared, with log-derivative -k**2 * mu**2.
 
-    By default, form the Cartesian product of kgrid and ugrid. With
-    paired=True, broadcast them pointwise; this lets segmented quadrature
-    evaluate batches of nodes without constructing a full grid.
+    By default, the rows are evaluated on the Cartesian product of kgrid and
+    ugrid. With paired=True, kgrid and ugrid are broadcast pointwise, so a
+    segmented quadrature can evaluate batches of nodes without a full grid.
+
+    Returns (deriv_list, paramnames).
     """
     c = cosmo
     use = expt['use']
@@ -489,8 +500,9 @@ def fisher_integrands(kgrid, ugrid, cosmo, expt, *, paired=False):
     # Dilation derivatives
     dlogpk_dk = logpk_derivative(c['pk_nobao'], k) # Numerical deriv.
 
-    # Algebraically equivalent to (q/y * ... * u2)**2, but finite at
-    # transverse modes (y=0). Odd-sized mu grids include that endpoint.
+    # 2 u2 (1 - u2) equals 2 (X u2 / y)^2 with X = (rnu/r) q aperp/apar. This
+    # form is finite at the transverse modes (y = 0), which are on the mu grid
+    # when it has an odd number of samples.
     angular_factor = 2. * u2 * (1. - u2)
     daperp_u2 = -angular_factor / aperp
     dapar_u2 = angular_factor / apar
@@ -532,22 +544,22 @@ def fisher_integrands(kgrid, ugrid, cosmo, expt, *, paired=False):
     paramnames = ['A', 'b_HI', 'Tb', 's_NL', 'sigma8tot', 'n_s', 'f',
                   'aperp', 'apar', 'fs8', 'bs8', 'pk']
 
-    # Unmodeled additive residual power (e.g. RFI surviving a mask).
+    # Residual power dP that is not part of the model, such as RFI left after
+    # a mask.
     #
-    # An additive dP that the model does not include biases the recovered
-    # parameters at first order by  dtheta_i = sum_j (F^-1)_ij B_j  with
-    #   B_j = Vfac * Int K^2 (dlnP/dtheta_j)(cs/ctot) (dP/ctot) dk du.
-    # The first two factors are exactly deriv_list[j], so B_j is the integral
-    # of deriv_list[j] against (dP/ctot) -- the same integral the Fisher
-    # elements already perform. Appending dP/ctot as a pseudo-derivative
-    # therefore puts the whole bias vector in the last row/column of F, with
-    # no change to the integration machinery.
+    # An additive dP biases the fitted parameters at first order by
+    #   dtheta_i = sum_j (F^-1)_ij B_j,
+    #   B_j = Vfac * Int K^2 (dlnP/dtheta_j) (cs/ctot) (dP/ctot) dk du.
+    # The factor (dlnP/dtheta_j) (cs/ctot) is deriv_list[j], so B_j has the
+    # form of a Fisher element with dP/ctot in place of deriv_list[i]. When
+    # dP/ctot is appended as one more row, the bias vector B is the last row
+    # and column of F, and the integration is unchanged.
     #
-    # expt['P_res'] is either a scalar multiple of the noise power, or a
-    # callable f(k, mu, cn, cs) returning dP on the (k, mu) grid.
-    # The caller must strip the '_Pres' row/column before inverting F; the
-    # entry is a bias, not a parameter, and treating it as one would
-    # marginalize over the very contamination being tested.
+    # expt['P_res'] is either a multiple of the noise power or a callable
+    # f(k, mu, cn, cs) that returns dP on the (k, mu) grid. The caller must
+    # remove the '_Pres' row and column before F is inverted. This entry is a
+    # bias term, and marginalizing over it would absorb the contamination
+    # under test.
     if 'P_res' in expt:
         pres = expt['P_res']
         c_res = pres(k, u2**0.5, cn, cs) if callable(pres) else float(pres) * cn
@@ -563,9 +575,11 @@ def fisher_integrands(kgrid, ugrid, cosmo, expt, *, paired=False):
 
 def prepare_bin(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0):
     """
-    Set up one redshift bin: copies of ``cosmo`` and ``expt`` filled in at the
-    bin center, the volume factor that multiplies the integrals, and the
-    (k, mu) grids that fisher() integrates over.
+    Set up one redshift bin for fisher().
+
+    ``cosmo`` and ``expt`` are copied and filled in at the bin center. Vfac is
+    the volume factor that multiplies the integrals, and kgrid and ugrid are
+    the (k, mu) grids that fisher() integrates over.
 
     Returns (cosmo, expt, Vfac, kgrid, ugrid).
     """
@@ -613,9 +627,9 @@ def fisher(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0):
     """
     Fisher matrix for one redshift bin [zmin, zmax].
 
-    ``cosmo`` holds the fiducial parameters with ``pk_nobao`` and ``fbao``
-    attached (load_power_spectrum); ``expt`` holds the telescope and survey
-    (see chime.py); ``cosmo_fns`` is (H, r, D, f) from
+    ``cosmo`` holds the fiducial parameters, with ``pk_nobao`` and ``fbao``
+    attached by load_power_spectrum. ``expt`` holds the telescope and survey
+    parameters (see chime.py). ``cosmo_fns`` is (H, r, D, f) from
     background_evolution_splines.
 
     Returns (F, paramnames).

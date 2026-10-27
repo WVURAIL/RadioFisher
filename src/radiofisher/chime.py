@@ -1,17 +1,19 @@
 """
-CHIME as forecast in the CHIME Overview (CHIME Collaboration 2022, ApJS 261,
-29, Appendix A): the Planck 2018 fiducial cosmology, the as-built 4 x 256
-cylinder geometry, T_sys = 55 K, 31,000 deg^2, one year, epsilon_fg = 0, the
-BAO-shift dilations only, and the as-built baseline density n(u).
+CHIME inputs for the forecast of the CHIME Overview (CHIME Collaboration 2022,
+ApJS 261, 29, Appendix A). The inputs are the Planck 2018 fiducial cosmology,
+the as-built 4 x 256 cylinder geometry, T_sys = 55 K, 31000 deg^2, one year,
+epsilon_fg = 0, the BAO-shift dilations only, and the as-built baseline
+density n(u).
 
-From S. Foreman's chime-update branch of RadioFisher (chime2021/
-experiments_CHIME.py), keeping only the keys the forecast reads.
+The values are taken from S. Foreman's chime-update branch of RadioFisher
+(chime2021/experiments_CHIME.py), and only the keys that the forecast reads
+are kept.
 """
 import os
 
 from .units import DEG_TO_RAD, HOUR_IN_MHZ_INVERSE, NU21_MHZ
 
-# Planck 2018 (CMB only) best fit, CHIME Collaboration 2022 Eq. A8
+# Planck 2018 (CMB only) best fit, CHIME Collaboration 2022 Equation (A8)
 cosmo = {
     'omega_M_0':        0.3158,
     'omega_lambda_0':   1 - 0.3158,
@@ -31,7 +33,7 @@ cosmo = {
     'sigma_nl':         7.,         # nonlinear damping scale [Mpc]
 }
 
-# Which terms enter the dilation derivatives: the BAO shift only
+# Only the BAO shift enters the dilation derivatives
 USE = {
     'f_rsd':            False,      # RSD constraint on f(z)
     'alpha_volume':     False,
@@ -49,7 +51,7 @@ SURVEY = {
     'use':              USE,
 }
 
-# Foreground model (Santos et al. 2005); scaled by epsilon_fg, so zero here
+# Foreground model of Santos et al. (2005), scaled by epsilon_fg and so zero here
 foregrounds = {
     'A':     [57.0, 0.014, 700., 0.088],        # FG noise amplitude [mK^2]
     'nx':    [1.1, 1.0, 2.4, 3.0],              # Angular scale powerlaw index
