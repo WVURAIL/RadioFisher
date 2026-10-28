@@ -10,7 +10,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 import radiofisher as rf
 from radiofisher import baofisher as bf
 from radiofisher.units import HOUR_IN_MHZ_INVERSE
@@ -151,3 +150,16 @@ def test_invalid_redshift_bin_is_refused(inputs, bounds):
     cosmo, expt, fns = inputs
     with pytest.raises(ValueError, match="redshift bounds"):
         rf.prepare_bin(*bounds, cosmo, expt, fns)
+
+
+def test_direct_derivative_is_opt_in(inputs):
+    cosmo, expt, fns = inputs
+    default, *_ = rf.prepare_bin(ZMIN, ZMAX, cosmo, expt, fns)
+    grid, *_ = rf.prepare_bin(ZMIN, ZMAX, cosmo, expt, fns, bao_derivative="grid")
+    direct, *_ = rf.prepare_bin(ZMIN, ZMAX, cosmo, expt, fns, bao_derivative="direct")
+    k = np.array([.01, .03, .075, .15])
+    np.testing.assert_array_equal(default["dfbao_dk"](k), grid["dfbao_dk"](k))
+    assert direct["dfbao_dk"].fbao is direct["fbao"]
+    assert isinstance(direct["dfbao_dk"], rf.DirectBAODerivative)
+    with pytest.raises(ValueError, match="bao_derivative"):
+        rf.prepare_bin(ZMIN, ZMAX, cosmo, expt, fns, bao_derivative="unknown")

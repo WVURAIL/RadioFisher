@@ -23,6 +23,7 @@ the first-order bias the residual causes. Strip them before inverting.
 (Phil Bull & Pedro G. Ferreira, 2013--2014; cut to the CHIME path in 2026)
 """
 import copy
+from dataclasses import dataclass
 
 import numpy as np
 import scipy.integrate
@@ -561,14 +562,45 @@ def fisher_integrands(kgrid, ugrid, cosmo, expt, *, paired=False):
 # Forecast for one redshift bin
 ################################################################################
 
-def prepare_bin(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0):
+@dataclass(frozen=True)
+class DirectBAODerivative:
+    """Direct BAO-template central difference with explicit cache bindings."""
+    fbao: object
+    step: float = 1e-7
+    cutoff: float = .03
+
+    def __post_init__(self):
+        if not callable(self.fbao):
+            raise TypeError("fbao must be callable")
+        if not np.isfinite(self.step) or self.step <= 0:
+            raise ValueError("step must be finite and positive")
+        if not np.isfinite(self.cutoff) or self.cutoff < 0:
+            raise ValueError("cutoff must be finite and nonnegative")
+
+    def __call__(self, k):
+        k = np.asarray(k)
+        return np.where(k <= self.cutoff, 0.,
+                        (self.fbao(k + self.step / 2) - self.fbao(k - self.step / 2)) / self.step)
+
+
+def direct_fbao_derivative(fbao, step=1e-7):
+    """Bind the direct derivative, zero at and below k = 0.03 Mpc^-1."""
+    return DirectBAODerivative(fbao, step)
+
+
+def prepare_bin(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0,
+                *, bao_derivative="grid", bao_step=1e-7):
     """
     Set up one redshift bin: copies of ``cosmo`` and ``expt`` filled in at the
     bin center, the volume factor that multiplies the integrals, and the
     (k, mu) grids that fisher() integrates over.
 
     Returns (cosmo, expt, Vfac, kgrid, ugrid).
+    bao_derivative="grid" preserves the original interpolation. "direct"
+    evaluates a central difference at requested nodes, using bao_step.
     """
+    if bao_derivative not in ("grid", "direct"):
+        raise ValueError("bao_derivative must be grid or direct")
     if not np.isfinite([zmin, zmax]).all() or not 0 <= zmin < zmax:
         raise ValueError("redshift bounds must satisfy 0 <= zmin < zmax")
     if not np.isfinite([kmin, kmax]).all() or not 0 < kmin < kmax:
@@ -606,7 +638,8 @@ def prepare_bin(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0):
     kgrid = np.logspace(np.log10(kmin), np.log10(kmax), NSAMP_K)
 
     # fbao(k) derivative
-    cosmo['dfbao_dk'] = fbao_derivative(cosmo['fbao'], kgrid)
+    cosmo['dfbao_dk'] = (fbao_derivative(cosmo['fbao'], kgrid) if bao_derivative == 'grid'
+                         else direct_fbao_derivative(cosmo['fbao'], bao_step))
     return cosmo, expt, Vfac, kgrid, ugrid
 
 def fisher(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0):

@@ -51,4 +51,16 @@ jobs:
         run: |
           python -m pip install --force-reinstall --no-deps dist/*.whl
           cd "$RUNNER_TEMP"
-          python -I -c "import os, radiofisher as rf; assert rf.__version__ == '1.0.0'; assert os.path.exists(rf.chime.CHIME['n(x)'])"
+          python -I - <<'PY'
+          import os
+          import radiofisher as rf
+          from radiofisher import baselines, quadrature
+
+          assert rf.__version__ == "1.1.0"
+          assert os.path.exists(rf.chime.CHIME["n(x)"])
+          assert os.path.exists(baselines.inter_file())
+          assert callable(quadrature.integrate_segments)
+          result = rf.summarize_fisher([[4.0]], ["x"], ["x"], bias_projection=[2.0])
+          assert result.sigma[0] == 0.5
+          assert result.bias[0] == 0.5
+          PY

@@ -29,7 +29,24 @@ If `expt['P_res']` is set, `fisher_integrands` adds one more row, `_Pres`, equal
 `dP(k, mu, C_N, C_S)`. It never enters `C_tot`, so the rest of the matrix is the clean
 forecast. The `_Pres` column gives the first-order bias: with `C` the inverse of the
 fitted block and `B` the `_Pres` column, the bias of the fitted parameters is `C B`.
-Strip `_Pres` before inverting.
+The `summarize_fisher()` result API performs that separation, checks the fitted
+block, and returns named covariance, uncertainty, and bias arrays. The original
+`fisher()` matrix API remains available.
+
+```python
+parameters = ("A", "s_NL", "aperp", "apar", "fs8", "bs8")
+result = rf.summarize_fisher(F, names, parameters)
+print(result.names, result.sigma, result.bias)
+# Physical distance: ln D_V = const - 2/3 ln alpha_perp - 1/3 ln alpha_par.
+distance = result.project([0, 0, -2/3, -1/3, 0, 0], ("ln_DV",))
+print(distance.sigma, distance.bias)
+```
+
+Here `F, names` are the output of `fisher()`, as in the example below. Parameters
+omitted from `parameters` are held fixed; included nuisance parameters are
+marginalized through the covariance. A clean forecast has `bias=None`. An
+explicit `bias_projection` vector can also be supplied instead of an embedded
+residual column. `sigma` always describes the clean statistical uncertainty.
 
 ## Use
 
@@ -72,9 +89,17 @@ of replacing the dependency in a forecast-reproduction environment.
 The P(k) table is a linear matter power spectrum at z = 0 (columns k in Mpc^-1 and
 P in Mpc^3). RFIsher ships the Planck 2018 table and checks it against the cosmology.
 
-`prepare_bin()` returns the set-up `fisher()` integrates over, so a caller can evaluate
-`fisher_integrands()` at its own quadrature nodes. RFIsher does this: RadioFisher's
-Simpson grid is not accurate enough for the bias row.
+`prepare_bin()` also supports `bao_derivative="direct"` with an explicit
+`bao_step` (default `1e-7` Mpc^-1). The default `"grid"` preserves the original
+forecast. `quadrature.py` provides segmented Gauss–Legendre nodes, the BAO and
+instrument breakpoints, and integration of the shared covariance integrands.
+RFIsher selects this path and adds the DTV wedge boundary.
+
+`quadrature_segments(edges, angular_edges, ...)` generates positive-mu nodes
+with weights `2 k^2 dk dmu`. This reflection requires an integrand even in mu.
+`integrate_segments(segments, cosmo, expt, volume_factor)` evaluates and sums
+those weighted products. A residual that is not even in mu needs appropriate
+full-domain nodes and weights; the integrator accepts those directly.
 
 ## Units and conventions
 
@@ -98,10 +123,22 @@ parameter-pair loops keep memory bounded.
 |---|---|
 | `src/radiofisher/baofisher.py` | the forecast: inputs, background, signal and noise, integrands, `fisher()` |
 | `src/radiofisher/units.py`, `instrument.py` | shared numerical conventions and instrument geometry |
+| `src/radiofisher/results.py` | named fitted-block solve, clean covariance, bias, and Jacobian projections |
+| `src/radiofisher/quadrature.py` | segmented quadrature, model breakpoints, and weighted integration |
+| `src/radiofisher/baselines.py` | CHIME all-pair and inter-cylinder baseline construction |
 | `src/radiofisher/chime.py` | CHIME and the Planck 2018 cosmology, as in the CHIME Overview |
 | `src/radiofisher/castorina.py` | the HI bias fit of Castorina & Villaescusa-Navarro (2017) |
-| `src/radiofisher/data/nx_CHIME_800.dat` | CHIME's as-built baseline density n(u) |
+| `src/radiofisher/data/nx_CHIME_800.dat`, `nx_CHIME_inter.dat` | CHIME all-pair and inter-cylinder densities |
 | `tools/generate_call_graph.py` | draws the call graph above |
+
+## Package boundary
+
+RadioFisher owns the forecasting physics and reusable numerical operations.
+It accepts the fitted parameter names, residual function, and projections from
+the caller. It does not select DTV channels, assign a residual strength, or
+choose a tolerance policy. RFIsher supplies those study choices and records
+the tables and figures. CHIME baseline selection is likewise a caller choice;
+the original experiment default still uses all baselines.
 
 ## Scope
 

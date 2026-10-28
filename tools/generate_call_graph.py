@@ -34,7 +34,7 @@ def arrow(x1, y1, x2, y2, col=INK, mk="a", label=None, lx=None, ly=None):
     return out
 
 
-W, H = 1180, 1110
+W, H = 1180, 1230
 s = [(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-family="DejaVu Sans, sans-serif" role="img" '
      'aria-label="RadioFisher call graph: inputs, fisher(), the integrands and where the residual row is added">'),
      ("<defs>"
@@ -93,10 +93,14 @@ s.append(arrow(590, 838, 590, 860))
 
 s.append(box(44, 862, 1092, 78, "3  integrate_fisher_elements(derivs, k, mu)",
              ["F_ij = Vfac x Int Int k^2 d_i d_j dk dmu   (integrate_grid: Simpson rule over the grid)",
-              "RFIsher replaces the BAO derivative and integrates paired=True batches with segmented Gauss-Legendre nodes"]))
-s.append(box(24, 972, 1132, 58, "Shared instrument.py helpers (RadioFisher and RFIsher)",
-             ["wavelength_m, collecting_area_m2, mode_limits: common wavelength, collecting area and mode cuts"]))
-s.append(text(24, 1056, "Output: F with rows A, b_HI, Tb, s_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8, pk and, with a residual, _Pres.", 12.5, INK))
-s.append(text(24, 1080, "Select the fitted parameter block F_fit; remove _Pres before inversion. Its cross-column is B, so bias = inverse(F_fit) B.", 12.5, INK))
+              "Alternative: quadrature.integrate_segments uses paired nodes; prepare_bin supports the direct BAO derivative"]))
+s.append(box(24, 972, 1132, 58, "Shared instrument.py and baselines.py helpers",
+             ["wavelength, collecting area, mode cuts; CHIME all-pair and inter-cylinder baseline densities"]))
+s.append(box(24, 1048, 1132, 138, "4  summarize_fisher(F, names, parameters)", [
+    "Caller selects fitted parameters; omitted parameters stay fixed. The residual is excluded from the fit.",
+    "Conditioned solve: covariance = inverse(F_fit); bias = inverse(F_fit) B; sigma = sqrt(diag(covariance)).",
+    "FisherResult holds names, Fisher block, bias projection, covariance, bias, sigma and condition.",
+    "result.project(J, names): derived covariance = J covariance J.T; derived bias = J bias.",
+    "RFIsher supplies the DTV model, integration boundary, fit choices, D_V weights, and tolerance reporting."]))
 s.append("</svg>")
 (Path(__file__).resolve().parents[1] / "docs" / "radiofisher_functions.svg").write_text("\n".join(s) + "\n")

@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 1110" font-family="DejaVu Sans, sans-serif" role="img" aria-label="RadioFisher call graph: inputs, fisher(), the integrands and where the residual row is added">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 1230" font-family="DejaVu Sans, sans-serif" role="img" aria-label="RadioFisher call graph: inputs, fisher(), the integrands and where the residual row is added">
 <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1C2B39"/></marker><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7F6310"/></marker></defs>
-<rect width="1180" height="1110" fill="#F7F7F7"/>
+<rect width="1180" height="1230" fill="#F7F7F7"/>
 <text x="24" y="34" font-size="19" fill="#1C2B39" font-weight="600" text-anchor="start" xml:space="preserve">RadioFisher: one redshift bin of a 21 cm BAO forecast</text>
 <text x="24" y="56" font-size="13" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">Main RadioFisher forecast path and the residual hook used by RFIsher (gold).</text>
 <rect x="24" y="76" width="360" height="118" rx="7" fill="#FFFFFF" stroke="#1C2B39" stroke-width="1.3"/>
@@ -73,10 +73,15 @@
 <rect x="44" y="862" width="1092" height="78" rx="7" fill="#FFFFFF" stroke="#1C2B39" stroke-width="1.3"/>
 <text x="56" y="885" font-size="14" fill="#1C2B39" font-weight="600" text-anchor="start" font-family="DejaVu Sans Mono, monospace" xml:space="preserve">3  integrate_fisher_elements(derivs, k, mu)</text>
 <text x="56" y="906" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">F_ij = Vfac x Int Int k^2 d_i d_j dk dmu   (integrate_grid: Simpson rule over the grid)</text>
-<text x="56" y="924" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">RFIsher replaces the BAO derivative and integrates paired=True batches with segmented Gauss-Legendre nodes</text>
+<text x="56" y="924" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">Alternative: quadrature.integrate_segments uses paired nodes; prepare_bin supports the direct BAO derivative</text>
 <rect x="24" y="972" width="1132" height="58" rx="7" fill="#FFFFFF" stroke="#1C2B39" stroke-width="1.3"/>
-<text x="36" y="995" font-size="14" fill="#1C2B39" font-weight="600" text-anchor="start" font-family="DejaVu Sans Mono, monospace" xml:space="preserve">Shared instrument.py helpers (RadioFisher and RFIsher)</text>
-<text x="36" y="1016" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">wavelength_m, collecting_area_m2, mode_limits: common wavelength, collecting area and mode cuts</text>
-<text x="24" y="1056" font-size="12.5" fill="#1C2B39" font-weight="normal" text-anchor="start" xml:space="preserve">Output: F with rows A, b_HI, Tb, s_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8, pk and, with a residual, _Pres.</text>
-<text x="24" y="1080" font-size="12.5" fill="#1C2B39" font-weight="normal" text-anchor="start" xml:space="preserve">Select the fitted parameter block F_fit; remove _Pres before inversion. Its cross-column is B, so bias = inverse(F_fit) B.</text>
+<text x="36" y="995" font-size="14" fill="#1C2B39" font-weight="600" text-anchor="start" font-family="DejaVu Sans Mono, monospace" xml:space="preserve">Shared instrument.py and baselines.py helpers</text>
+<text x="36" y="1016" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">wavelength, collecting area, mode cuts; CHIME all-pair and inter-cylinder baseline densities</text>
+<rect x="24" y="1048" width="1132" height="138" rx="7" fill="#FFFFFF" stroke="#1C2B39" stroke-width="1.3"/>
+<text x="36" y="1071" font-size="14" fill="#1C2B39" font-weight="600" text-anchor="start" font-family="DejaVu Sans Mono, monospace" xml:space="preserve">4  summarize_fisher(F, names, parameters)</text>
+<text x="36" y="1092" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">Caller selects fitted parameters; omitted parameters stay fixed. The residual is excluded from the fit.</text>
+<text x="36" y="1110" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">Conditioned solve: covariance = inverse(F_fit); bias = inverse(F_fit) B; sigma = sqrt(diag(covariance)).</text>
+<text x="36" y="1128" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">FisherResult holds names, Fisher block, bias projection, covariance, bias, sigma and condition.</text>
+<text x="36" y="1146" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">result.project(J, names): derived covariance = J covariance J.T; derived bias = J bias.</text>
+<text x="36" y="1164" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">RFIsher supplies the DTV model, integration boundary, fit choices, D_V weights, and tolerance reporting.</text>
 </svg>
