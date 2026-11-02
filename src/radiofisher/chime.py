@@ -51,16 +51,6 @@ SURVEY = {
     'use':              USE,
 }
 
-# Foreground model of Santos et al. (2005), scaled by epsilon_fg and so zero here
-foregrounds = {
-    'A':     [57.0, 0.014, 700., 0.088],        # FG noise amplitude [mK^2]
-    'nx':    [1.1, 1.0, 2.4, 3.0],              # Angular scale powerlaw index
-    'mx':    [-2.07, -2.10, -2.80, -2.15],      # Frequency powerlaw index
-    'l_p':   1000.,                             # Reference angular scale
-    'nu_p':  130.                               # Reference frequency [MHz]
-}
-cosmo['foregrounds'] = foregrounds
-
 CHIME = {
     'mode':             'icyl',             # cylinder interferometer
     'Ndish':            1024,               # feeds (receivers)

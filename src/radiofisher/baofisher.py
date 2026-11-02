@@ -13,11 +13,10 @@ model.
       fisher_integrands(k, mu)     one row per parameter: d ln C_S / d theta * C_S / C_tot
         Csignal                    HI signal power, C_S
         Cnoise                     thermal noise power, C_N (Tsys_tot, interferometer_response)
-        Cfg                        foreground residual power, C_FG
         expt['P_res']              extra row '_Pres' = dP / C_tot (enters only here)
       integrate_fisher_elements    Simpson rule over (k, mu)
 
-The residual never enters C_tot = C_S + C_N + C_FG, so the Fisher matrix and
+The residual never enters C_tot = C_S + C_N, so the Fisher matrix and
 its uncertainties are those of a clean survey. The '_Pres' row and column hold
 the first-order bias caused by the residual, and they must be removed before F
 is inverted.
@@ -25,6 +24,7 @@ is inverted.
 (Phil Bull & Pedro G. Ferreira, 2013--2014; cut to the CHIME path in 2026)
 """
 import copy
+from dataclasses import dataclass
 
 import numpy as np
 import scipy.integrate
@@ -220,34 +220,6 @@ def inverse_interpfn(f):
     values = np.asarray(f, dtype=float)
     return np.divide(1., values, out=np.zeros_like(values), where=values != 0)
 
-def logpk_derivative(pk, kgrid):
-    """
-    Calculate the first derivative of the (log) power spectrum,
-    d log P(k) / d k. Sets the derivative to zero wherever P(k) is not defined.
-
-    Parameters
-    ----------
-
-    pk : function
-        Callable function (usually an interpolation fn.) for P(k)
-
-    kgrid : array_like
-        Array of k values on which the integral will be computed.
-    """
-    # Calculate dlog(P(k))/dk using central difference technique
-    # (Sets lowest-k values to zero since P(k) not defined there)
-    # Divisions by zero are expected at the edge of the P(k) range. Their
-    # warnings are silenced with np.errstate for this block only.
-    dk = 1e-7
-    with np.errstate(divide='ignore', invalid='ignore'):
-        dP = pk(kgrid + 0.5*dk) / pk(kgrid - 0.5*dk)
-    # Invalid and non-positive ratios are set to 1, which sets the derivative
-    # to zero. These ratios occur when a sample straddles the edge of the P(k)
-    # input range, where pk = 0 on one side. Their log is infinite and would
-    # enter every Fisher row with an alpha-shift term.
-    dP[(~np.isfinite(dP)) | (dP <= 0.)] = 1.
-    dlogpk_dk = np.log(dP) / dk
-    return dlogpk_dk
 
 def fbao_derivative(fbao, kgrid, kref=(3e-2, 4.5e-1)):
     """
@@ -310,7 +282,7 @@ def integrate_fisher_elements(derivs, kgrid, ugrid):
 
 
 ################################################################################
-# Signal, noise and foreground covariances
+# Signal and noise covariances
 ################################################################################
 
 def Tsys_tot(z, expt):
@@ -407,28 +379,6 @@ def Csignal(q, y, cosmo, expt):
 
     return cs
 
-def Cfg(q, y, cosmo, expt):
-    """
-    Foreground removal noise covariance, from Santos et al. (2005), scaled by epsilon_fg squared. [mK^2]
-    """
-    fg = cosmo['foregrounds']
-    n_fg = len(fg['A']) # No. of foreground components
-    nu = expt['nu_line'] / (1. + cosmo['z']) # Center freq. of redshift bin
-
-    # Replace zeros in q to prevent division by zero
-    _q = q.copy()
-    _q[np.where(q == 0.)] = 1e-100 # Set to a very small (but non-zero) value
-
-    # Sum foreground noise contributions
-    Cfg = 0
-    for i in range(n_fg):
-        Cx = fg['A'][i] * (fg['l_p'] / (2.*np.pi*_q))**fg['nx'][i] \
-                        * (nu / fg['nu_p'])**fg['mx'][i]
-        Cx[np.where(q == 0.)] = INF_NOISE # Mask values where q is zero
-        Cfg += Cx
-
-    # Scale by FG subtraction residual amplitude and return
-    return expt['epsilon_fg']**2. * Cfg
 
 
 ################################################################################
@@ -439,10 +389,9 @@ def fisher_integrands(kgrid, ugrid, cosmo, expt, *, paired=False):
     """Return the Fisher integrands, one row per parameter, on the (k, mu) grid.
 
     Each row is d ln C_S / d theta * C_S / C_tot. The parameters are, in
-    order, A, b_HI, Tb, s_NL, sigma8tot, n_s, f, aperp, apar, fs8, bs8, pk
-    and, when expt['P_res'] is set, _Pres. The dilation terms in aperp and
-    apar are selected by expt['use']. s_NL is a damping variance in Mpc
-    squared, with log-derivative -k**2 * mu**2.
+    order, A, s_NL, aperp, apar, fs8, bs8 and, when expt['P_res'] is set,
+    _Pres. Only the BAO-shift dilation terms are retained. s_NL is a damping
+    variance in Mpc squared, with log-derivative -k**2 * mu**2.
 
     By default, the rows are evaluated on the Cartesian product of kgrid and
     ugrid. With paired=True, kgrid and ugrid are broadcast pointwise, so a
@@ -465,84 +414,32 @@ def fisher_integrands(kgrid, ugrid, cosmo, expt, *, paired=False):
     k = np.sqrt( (aperp*q/r)**2. + (apar*y/rnu)**2. )
     u2 = y**2. / ( y**2. + (q * rnu/r * aperp/apar)**2. )
 
-    # Linear growth rate and growth factor
-    f, D = c['f'], c['D']
-    Dinv = inverse_interpfn(D)
-
-    # Linear HI bias
-    b = c['btot'] = c['bHI']
-
-    # Signal, noise and foreground covariances
+    # Only the six fitted coordinates of the adopted BAO forecast are evaluated.
+    if use != {"f_rsd": False, "alpha_volume": False, "alpha_rsd_angle": False,
+               "alpha_rsd_shift": False, "alpha_bao_shift": True, "alpha_pk_shift": False}:
+        raise ValueError("only BAO-shift dilation derivatives are supported")
+    if expt.get("epsilon_fg", 0) != 0:
+        raise ValueError("the adopted forecast requires epsilon_fg=0")
+    f, D = c["f"], c["D"]
+    b = c["btot"] = c["bHI"]
     cs = Csignal(q, y, cosmo, expt)
     cn = Cnoise(q, y, cosmo, expt)
-    cf = Cfg(q, y, cosmo, expt)
-    ctot = cs + cn + cf
-
-    # Derivatives of the Kaiser RSD function
-    drsd_df = 2. * u2 / (b + f*u2)
-    drsd_dfsig8 = 2. * u2 * Dinv / (b*c['sigma_8'] + f*c['sigma_8']*u2)
-    drsd_dsig2 = -k**2. * u2
-    drsd_du2 = 2.*f / (b + f*u2) - (k * c['sigma_nl'])**2.
-    drsd_dk = -2. * k * u2 * c['sigma_nl']**2.
-
-    # Analytic log-derivatives
-    deriv_A   = c['fbao'](k) / (1. + c['A']*c['fbao'](k)) * cs / ctot
-    deriv_bHI = 2. / (b + f*u2) * cs / ctot
-    deriv_f   = use['f_rsd'] * drsd_df * cs / ctot
-    deriv_bsig8 = 2.*Dinv/(b*c['sigma_8'] + f*c['sigma_8']*u2) * cs / ctot
-    deriv_fsig8 = drsd_dfsig8 * cs / ctot
-    deriv_sig2 = drsd_dsig2 * cs / ctot
-    deriv_pk = cs / ctot
-    deriv_sigma8 = (2. / c['sigma_8']) * cs / ctot
-    deriv_ns = np.log(k / c['k_piv']) * cs / ctot
-    deriv_Tb = (2. / c['Tb']) * cs / ctot
-
-    # Dilation derivatives
-    dlogpk_dk = logpk_derivative(c['pk_nobao'], k) # Numerical deriv.
-
-    # 2 u2 (1 - u2) equals 2 (X u2 / y)^2 with X = (rnu/r) q aperp/apar. This
-    # form is finite at the transverse modes (y = 0), which are on the mu grid
-    # when it has an odd number of samples.
-    angular_factor = 2. * u2 * (1. - u2)
-    daperp_u2 = -angular_factor / aperp
-    dapar_u2 = angular_factor / apar
-    daperp_k = (aperp*q/r)**2. / (k*aperp)
-    dapar_k  = (apar*y/rnu)**2. / (k*apar)
-
-    # Split-out alpha terms so that they can be switched on and off
-    dfbao_dk = c['dfbao_dk'](k)
-    t_term = [0,] * 5; r_term = [0,] * 5
-    use_term = [ use['alpha_volume'], use['alpha_rsd_angle'],
-                 use['alpha_rsd_shift'], use['alpha_bao_shift'],
-                 use['alpha_pk_shift'] ]
-
-    # (t = transverse)
-    t_term[0] = (2./aperp)
-    t_term[1] = drsd_du2 * daperp_u2
-    t_term[2] = drsd_dk * daperp_k
-    t_term[3] = c['A'] * dfbao_dk / (1. + c['A'] * c['fbao'](k)) * daperp_k
-    t_term[4] = dlogpk_dk * daperp_k
-
-    # (r = radial)
-    r_term[0] = (1./apar)
-    r_term[1] = drsd_du2 * dapar_u2
-    r_term[2] = drsd_dk * dapar_k
-    r_term[3] = c['A'] * dfbao_dk / (1. + c['A'] * c['fbao'](k)) * dapar_k
-    r_term[4] = dlogpk_dk * dapar_k
-
-    # Sum-up all terms
-    deriv_aperp = 0; deriv_apar = 0
-    for i in range(5):
-        deriv_aperp += use_term[i] * t_term[i]
-        deriv_apar  += use_term[i] * r_term[i]
-    deriv_aperp *= cs / ctot
-    deriv_apar  *= cs / ctot
-
-    deriv_list = [ deriv_A, deriv_bHI, deriv_Tb, deriv_sig2, deriv_sigma8,
-                   deriv_ns, deriv_f, deriv_aperp, deriv_apar,
-                   deriv_fsig8, deriv_bsig8, deriv_pk ]
-    paramnames = ['A', 'b_HI', 'Tb', 's_NL', 'sigma8tot', 'n_s', 'f',
-                  'aperp', 'apar', 'fs8', 'bs8', 'pk']
+    ctot = cs + cn
+    fraction = cs / ctot
+    amplitude = c["fbao"](k) / (1 + c["A"] * c["fbao"](k))
+    bao = c["A"] * c["dfbao_dk"](k) / (1 + c["A"] * c["fbao"](k))
+    daperp_k = (aperp*q/r)**2 / (k*aperp)
+    dapar_k = (apar*y/rnu)**2 / (k*apar)
+    common = 2 * inverse_interpfn(D) / (c["sigma_8"] * (b + f*u2))
+    deriv_list = [
+        amplitude * fraction,
+        -k**2 * u2 * fraction,
+        bao * daperp_k * fraction,
+        bao * dapar_k * fraction,
+        common * u2 * fraction,
+        common * fraction,
+    ]
+    paramnames = ["A", "s_NL", "aperp", "apar", "fs8", "bs8"]
 
     # Residual power dP that is not part of the model, such as RFI left after
     # a mask.
@@ -573,7 +470,34 @@ def fisher_integrands(kgrid, ugrid, cosmo, expt, *, paired=False):
 # Forecast for one redshift bin
 ################################################################################
 
-def prepare_bin(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0):
+@dataclass(frozen=True)
+class DirectBAODerivative:
+    """Direct BAO-template central difference with explicit cache bindings."""
+    fbao: object
+    step: float = 1e-7
+    cutoff: float = .03
+
+    def __post_init__(self):
+        if not callable(self.fbao):
+            raise TypeError("fbao must be callable")
+        if not np.isfinite(self.step) or self.step <= 0:
+            raise ValueError("step must be finite and positive")
+        if not np.isfinite(self.cutoff) or self.cutoff < 0:
+            raise ValueError("cutoff must be finite and nonnegative")
+
+    def __call__(self, k):
+        k = np.asarray(k)
+        return np.where(k <= self.cutoff, 0.,
+                        (self.fbao(k + self.step / 2) - self.fbao(k - self.step / 2)) / self.step)
+
+
+def direct_fbao_derivative(fbao, step=1e-7):
+    """Bind the direct derivative, zero at and below k = 0.03 Mpc^-1."""
+    return DirectBAODerivative(fbao, step)
+
+
+def prepare_bin(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0,
+                *, bao_derivative="grid", bao_step=1e-7):
     """
     Set up one redshift bin for fisher().
 
@@ -582,7 +506,11 @@ def prepare_bin(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0):
     the (k, mu) grids that fisher() integrates over.
 
     Returns (cosmo, expt, Vfac, kgrid, ugrid).
+    bao_derivative="grid" preserves the original interpolation. "direct"
+    evaluates a central difference at requested nodes, using bao_step.
     """
+    if bao_derivative not in ("grid", "direct"):
+        raise ValueError("bao_derivative must be grid or direct")
     if not np.isfinite([zmin, zmax]).all() or not 0 <= zmin < zmax:
         raise ValueError("redshift bounds must satisfy 0 <= zmin < zmax")
     if not np.isfinite([kmin, kmax]).all() or not 0 < kmin < kmax:
@@ -620,7 +548,8 @@ def prepare_bin(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0):
     kgrid = np.logspace(np.log10(kmin), np.log10(kmax), NSAMP_K)
 
     # fbao(k) derivative
-    cosmo['dfbao_dk'] = fbao_derivative(cosmo['fbao'], kgrid)
+    cosmo['dfbao_dk'] = (fbao_derivative(cosmo['fbao'], kgrid) if bao_derivative == 'grid'
+                         else direct_fbao_derivative(cosmo['fbao'], bao_step))
     return cosmo, expt, Vfac, kgrid, ugrid
 
 def fisher(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0):
