@@ -1,6 +1,7 @@
 """Quadrature measures, moving discontinuities, and direct BAO derivatives."""
 import numpy as np
 import pytest
+
 from radiofisher import baofisher
 from radiofisher.quadrature import integrate_segments, quadrature_segments
 

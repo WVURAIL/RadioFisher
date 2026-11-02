@@ -7,7 +7,6 @@ __version__ = "1.1.0"
 
 from . import chime
 from .baofisher import (
-    Cfg,
     Cnoise,
     Csignal,
     DirectBAODerivative,
@@ -23,7 +22,6 @@ from .baofisher import (
 from .results import FisherResult, ProjectedResult, summarize_fisher
 
 __all__ = [
-    "Cfg",
     "Cnoise",
     "Csignal",
     "DirectBAODerivative",

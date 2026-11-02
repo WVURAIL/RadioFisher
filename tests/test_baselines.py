@@ -1,6 +1,7 @@
 """CHIME geometry reproduces both density tables and receiver-pair counts."""
 import numpy as np
 import pytest
+
 from radiofisher import baselines
 
 

@@ -1,6 +1,7 @@
 """Named Fisher reduction and propagation against independent known answers."""
 import numpy as np
 import pytest
+
 from radiofisher import summarize_fisher
 
 NAMES = ("x", "y", "_Pres")

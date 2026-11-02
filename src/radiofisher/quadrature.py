@@ -29,8 +29,6 @@ def radial_edges(cosmo, expt, knots, *, kmin=1e-7, kmax=1.0, bao_step=1e-7):
     baseline = 2 * np.pi * nu * np.asarray(knots) / cosmo["r"]
     parts = [np.array([kmin, .03, kmax, knl, kfg]), template, pk, active - h,
              active + h, baseline, np.sqrt(baseline ** 2 + kfg ** 2)]
-    if expt["use"]["alpha_pk_shift"]:
-        parts.extend([pk - 5e-8, pk + 5e-8])
     edges = np.unique(np.concatenate(parts))
     return edges[(edges >= kmin) & (edges <= kmax)]
 

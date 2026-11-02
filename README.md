@@ -8,19 +8,19 @@ ApJS 261, 29, Appendix A), with one hook for a power the model does not include.
 [RFIsher](https://github.com/WVURAIL/RFIsher) uses that hook to find how much residual
 DTV power each 6 MHz channel can tolerate.
 
-![RadioFisher call graph](docs/radiofisher_functions.svg)
 
 ## What it computes
 
-For one redshift bin, `fisher()` returns the Fisher matrix of twelve parameters:
-the BAO amplitude `A`, the HI bias `b_HI`, the brightness temperature `Tb`, the damping
-variance `s_NL = sigma_nl^2` (Mpc squared), `sigma8tot`, `n_s`, the growth rate `f`, the two dilations `aperp` and
-`apar`, `fs8`, `bs8` and the power amplitude `pk`. Each element is
+For one redshift bin, `fisher()` returns the Fisher matrix for six fitted
+parameters: BAO amplitude `A`, damping variance `s_NL = sigma_nl^2`,
+the dilations `aperp` and `apar`, and `fs8` and `bs8`. Each element is
 
     F_ij = Vfac * Int Int k^2 d_i d_j dk dmu,   d_i = (d ln C_S / d theta_i) * C_S / C_tot
 
-with `C_tot = C_S + C_N + C_FG`: the HI signal (`Csignal`), the thermal noise of the
-cylinder array (`Cnoise`) and the foreground residual (`Cfg`, zero for CHIME here).
+The clean covariance is `C_tot = C_S + C_N`: HI signal plus thermal noise.
+Dilation derivatives shift the BAO feature only. The reference forecast's
+foreground mode limit and nonlinear scale are retained. Other dilation
+switches and nonzero foreground-residual amplitudes are refused.
 
 ## The residual hook
 
@@ -79,7 +79,7 @@ PY
 python -m pytest -q
 ```
 
-The example prints `(13, 13) _Pres`: twelve forecast parameters plus the
+The example prints `(7, 7) _Pres`: six fitted parameters plus the
 residual row. The tests check the matrices against the recorded reference.
 
 If you are using RFIsher, let its installer select RadioFisher's pinned
@@ -93,7 +93,7 @@ P in Mpc^3). RFIsher ships the Planck 2018 table and checks it against the cosmo
 `bao_step` (default `1e-7` Mpc^-1). The default `"grid"` preserves the original
 forecast. `quadrature.py` provides segmented Gauss–Legendre nodes, the BAO and
 instrument breakpoints, and integration of the shared covariance integrands.
-RFIsher selects this path and adds the DTV wedge boundary.
+RFIsher uses this path to integrate the clean forecast and additive residual response.
 
 `quadrature_segments(edges, angular_edges, ...)` generates positive-mu nodes
 with weights `2 k^2 dk dmu`. This reflection requires an integrand even in mu.
@@ -112,7 +112,7 @@ the rounded speed of light, so replacing it with the SI value would require
 a consistent new model and regenerated inputs.
 
 `instrument.py` supplies wavelength, effective collecting area and mode cuts
-for both RadioFisher's noise and RFIsher's residual. `fisher_integrands` accepts
+for the forecast noise and integration domain. `fisher_integrands` accepts
 `paired=True` for pointwise batches; its default evaluates a Cartesian grid.
 The Simpson integrator evaluates the angular axis in NumPy arrays. Independent
 parameter-pair loops keep memory bounded.
@@ -129,7 +129,6 @@ parameter-pair loops keep memory bounded.
 | `src/radiofisher/chime.py` | CHIME and the Planck 2018 cosmology, as in the CHIME Overview |
 | `src/radiofisher/castorina.py` | the HI bias fit of Castorina & Villaescusa-Navarro (2017) |
 | `src/radiofisher/data/nx_CHIME_800.dat`, `nx_CHIME_inter.dat` | CHIME all-pair and inter-cylinder densities |
-| `tools/generate_call_graph.py` | draws the call graph above |
 
 ## Package boundary
 
@@ -140,14 +139,12 @@ choose a tolerance policy. RFIsher supplies those study choices and records
 the tables and figures. CHIME baseline selection is likewise a caller choice;
 the original experiment default still uses all baselines.
 
-## Scope
+## Reference check
 
-Everything off this path: the other telescopes and survey modes, galaxy surveys,
-modified gravity, neutrino and non-Gaussianity parameters, CAMB execution, the
-redshift-binning and plotting helpers, and the CHIME Overview's multi-bin combination.
-The full code is at commit ae723f7 of this repository. The tests compare the matrices with
-that commit's output (`tests/data/reference_ae723f7.json`) to 1e-8 relative. The reference
-file names the fourth row `sigma_NL`; it is the same variance as `s_NL`.
+The tests compare the retained six-parameter block with the original output
+at commit ae723f7 (`tests/data/reference_ae723f7.json`) to 1e-8 relative.
+The reference names the damping variance `sigma_NL`; the current name is
+`s_NL`.
 
 ## Tests
 
