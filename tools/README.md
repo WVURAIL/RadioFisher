@@ -1,9 +1,6 @@
-# Documentation tools
+# Figure palette
 
-From the repository root, run `python tools/generate_call_graph.py` to regenerate
-`docs/radiofisher_functions.svg`. It is not part of the forecast library.
-
-The diagram is a curated overview, not an automatically extracted call graph.
-When the forecast changes, update the labels in the generator and regenerate
-the SVG. It distinguishes RadioFisher's Simpson integration from RFIsher's
-segmented quadrature and the residual projection from the resulting bias.
+`wvu_palette.py` is the standalone WVU figure palette generated from
+`wvu_beamer_template/styles/beamercolorthemewvu.sty`. Update it with
+`tools/export_plot_palette.py` in that repository. It is not part of the
+forecast library.
