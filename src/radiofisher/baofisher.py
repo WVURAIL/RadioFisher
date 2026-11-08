@@ -1,10 +1,10 @@
 """
-Fisher forecast for 21 cm intensity mapping with a cylinder interferometer.
+Fisher forecast for 21 cm intensity mapping with a cylinder or dish interferometer.
 
 This module is the part of RadioFisher (Bull et al. 2015, ApJ 803, 21) used
 by the CHIME Overview forecast (CHIME Collaboration 2022, ApJS 261, 29,
 Appendix A). Only one path is kept: one redshift bin, the Kaiser
-redshift-space signal, the cylinder-interferometer noise, and the BAO-shift
+redshift-space signal, the interferometer noise, and the BAO-shift
 dilations. One hook, ``expt['P_res']``, adds a power that is not part of the
 model.
 
@@ -31,7 +31,7 @@ import scipy.integrate
 import scipy.interpolate
 
 from .castorina import hi_bias
-from .instrument import collecting_area_m2, mode_limits, wavelength_m
+from .instrument import MODES, beam_width, collecting_area_m2, mode_limits, wavelength_m
 from .units import FORECAST_LIGHT_SPEED_KM_S
 
 # Samples in k and mu for the Simpson integration in fisher().
@@ -292,7 +292,7 @@ def Tsys_tot(z, expt):
     return expt['Tsys_tot(z)'](z)
 
 def interferometer_response(q, y, cosmo, expt):
-    """Return the cylinder noise factor (1 / n(u)) * exp[(k_par / sigma_kpar)^2].
+    """Return the interferometer noise factor (1 / n(u)) * exp[(k_par / sigma_kpar)^2].
 
     n(u) is the baseline density, and the exponential is the inverse square of
     the Gaussian channel response along the line of sight.
@@ -316,12 +316,12 @@ def interferometer_response(q, y, cosmo, expt):
 
 def Cnoise(q, y, cosmo, expt):
     """
-    Thermal noise power C_N of a cylinder interferometer [mK^2]. Modes with
+    Thermal noise power C_N of a cylinder or dish interferometer [mK^2]. Modes with
     |k_par| below the foreground cut k_fg or |k| above the nonlinear scale k_NL
     are set to infinite noise (INF_NOISE).
     """
-    if expt['mode'] != 'icyl':
-        raise ValueError("only the cylinder interferometer ('icyl') is supported")
+    if expt['mode'] not in MODES:
+        raise ValueError(f"only the interferometer modes {MODES} are supported")
     c = cosmo
     kperp = q / (c['aperp']*c['r'])
     kpar = y / (c['apar']*c['rnu'])
@@ -337,10 +337,9 @@ def Cnoise(q, y, cosmo, expt):
     Tsys = Tsys_tot(c['z'], expt)
     noise = Tsys**2. * Vsurvey / (npol * expt['ttot'] * expt['dnutot'])
 
-    # Collecting area per receiver. The cylinder field of view is about
-    # 90 deg x lambda/D, and theta_b is the square root of that solid angle.
+    # Collecting area per receiver and the square root of the field of view
     Aeff = collecting_area_m2(expt)
-    theta_b = np.sqrt( 0.5 * np.pi * wavelength / expt['Ddish'] )
+    theta_b = beam_width(wavelength, expt)
     noise *= interferometer_response(q, y, cosmo, expt)
     noise *= wavelength**4. / (expt['Nbeam'] * (Aeff * theta_b)**2.)
 
