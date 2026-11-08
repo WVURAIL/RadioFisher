@@ -10,9 +10,25 @@ def wavelength_m(frequency_mhz):
     return FORECAST_LIGHT_SPEED_KM_S * 1000 / (frequency_mhz * 1e6)
 
 
+MODES = ("icyl", "idish")   # cylinder and dish interferometers
+
+
 def collecting_area_m2(expt):
-    """Effective cylinder collecting area per receiver, in square meters."""
+    """Effective collecting area per receiver, in square meters."""
+    if expt["mode"] == "idish":
+        return expt.get("effic", 0.7) * 0.25 * np.pi * expt["Ddish"] ** 2
     return expt.get("effic", 0.7) * expt["Ncyl"] * expt["cyl_area"] / expt["Ndish"]
+
+
+def beam_width(wavelength, expt):
+    """Square root of the field of view in steradians.
+
+    A cylinder sees about 90 deg x lambda/D, and a dish about (lambda/D)^2
+    (Bull et al. 2015).
+    """
+    if expt["mode"] == "idish":
+        return wavelength / expt["Ddish"]
+    return np.sqrt(0.5 * np.pi * wavelength / expt["Ddish"])
 
 
 def mode_limits(cosmo, expt):

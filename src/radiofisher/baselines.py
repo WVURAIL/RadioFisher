@@ -1,4 +1,4 @@
-"""CHIME baseline density from the array layout.
+"""Baseline density from the array layout, for CHIME and other grid arrays.
 
 The density n(x) = n(u) nu[MHz]**2 counts unordered feed pairs, with
 x = baseline_length / 300 m under the forecast light-speed convention.
@@ -28,22 +28,36 @@ def inter_file() -> Path:
     return Path(str(resources.files("radiofisher").joinpath("data", INTER_FILE)))
 
 
-def density(x, inter_only: bool = True) -> np.ndarray:
-    """Compute n(x) from the array layout at the supplied bin centers x.
+def grid_density(x, rows: int, columns: int, row_spacing_m: float, column_spacing_m: float,
+                 inter_row_only: bool = False, min_baseline_m: float = 0.0) -> np.ndarray:
+    """n(x) of a filled rectangular grid of receivers at the supplied bin centers x.
 
-    The bins are uniform and start at zero.
+    The grid has ``rows`` lines of ``columns`` receivers. For a cylinder array a
+    row is one cylinder, and ``inter_row_only`` drops the pairs on one cylinder.
+    Baselines shorter than ``min_baseline_m``, such as those below a dish
+    diameter, are dropped. The bins are uniform and start at zero.
     """
     x = np.asarray(x, dtype=float)
     dx = x[1] - x[0]
     edges = np.r_[x - dx / 2, x[-1] + dx / 2]
-    e = np.arange(-(CYLINDERS - 1), CYLINDERS)
-    n = np.arange(-(FEEDS - 1), FEEDS)
+    e = np.arange(-(rows - 1), rows)
+    n = np.arange(-(columns - 1), columns)
     E, N = np.meshgrid(e, n, indexing="ij")
-    pairs = np.outer(CYLINDERS - np.abs(e), FEEDS - np.abs(n)).astype(float)   # ordered pairs per offset
-    d = np.hypot(E * CYLINDER_SPACING_M, N * FEED_SPACING_M) / METERS_PER_X
-    keep = (d > 0) & (E != 0) if inter_only else d > 0
+    pairs = np.outer(rows - np.abs(e), columns - np.abs(n)).astype(float)   # ordered pairs per offset
+    d = np.hypot(E * row_spacing_m, N * column_spacing_m) / METERS_PER_X
+    keep = (d > 0) & (d >= min_baseline_m / METERS_PER_X)
+    if inter_row_only:
+        keep &= E != 0
     counts, _ = np.histogram(d[keep], bins=edges, weights=pairs[keep])
     return counts / (2 * np.pi * x * dx) / 2
+
+
+def density(x, inter_only: bool = True) -> np.ndarray:
+    """Compute the CHIME n(x) from the array layout at the supplied bin centers x.
+
+    The bins are uniform and start at zero.
+    """
+    return grid_density(x, CYLINDERS, FEEDS, CYLINDER_SPACING_M, FEED_SPACING_M, inter_row_only=inter_only)
 
 
 def build(path=None) -> Path:

@@ -1,12 +1,12 @@
-"""Forecast 21 cm BAO measurements with a cylinder interferometer.
+"""Forecast 21 cm BAO measurements with a cylinder or dish interferometer.
 
 This package is the part of RadioFisher (Bull et al. 2015) used by the CHIME
-Overview forecast. See baofisher.py for the call sequence and chime.py for the
-CHIME inputs.
+Overview forecast. See baofisher.py for the call sequence, chime.py for the
+CHIME inputs and arrays.py for nominal CHORD, HIRAX and outrigger inputs.
 """
 __version__ = "1.1.0"
 
-from . import chime
+from . import arrays, chime
 from .baofisher import (
     Cnoise,
     Csignal,
@@ -28,6 +28,7 @@ __all__ = [
     "DirectBAODerivative",
     "FisherResult",
     "ProjectedResult",
+    "arrays",
     "background_evolution_splines",
     "chime",
     "direct_fbao_derivative",

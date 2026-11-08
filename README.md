@@ -1,7 +1,7 @@
 # RadioFisher (CHIME forecast path)
 
 RadioFisher computes a Fisher forecast of the baryon acoustic oscillation (BAO)
-dilations from a 21 cm intensity-mapping survey with a cylinder interferometer.
+dilations from a 21 cm intensity-mapping survey with a cylinder or dish interferometer.
 This repository is RadioFisher (Bull, Ferreira, Patel & Santos 2015, ApJ 803, 21,
 [arXiv:1405.1452](https://arxiv.org/abs/1405.1452)) cut down to the one path used by
 the CHIME Overview forecast (CHIME Collaboration 2022, ApJS 261, 29, Appendix A).
@@ -130,10 +130,21 @@ axis. To keep memory bounded, the parameter pairs are integrated one at a time.
 | `src/radiofisher/units.py`, `instrument.py` | shared numerical conventions and instrument geometry |
 | `src/radiofisher/results.py` | named fitted-block solve, clean covariance, bias, and Jacobian projections |
 | `src/radiofisher/quadrature.py` | segmented quadrature, model breakpoints, and weighted integration |
-| `src/radiofisher/baselines.py` | CHIME all-pair and inter-cylinder baseline construction |
+| `src/radiofisher/baselines.py` | baseline density of a grid array, with the CHIME all-pair and inter-cylinder cases |
 | `src/radiofisher/chime.py` | CHIME and the Planck 2018 cosmology, as in the CHIME Overview |
+| `src/radiofisher/arrays.py` | nominal CHORD, HIRAX and CHIME/FRB outrigger (KKO, GBO, HCRO) inputs |
 | `src/radiofisher/castorina.py` | the HI bias fit of Castorina & Villaescusa-Navarro (2017) |
 | `src/radiofisher/data/nx_CHIME_800.dat`, `nx_CHIME_inter.dat` | CHIME all-pair and inter-cylinder densities |
+| `src/radiofisher/data/nx_<array>.dat` | densities of the arrays in `arrays.py`, rebuilt by `python -m radiofisher.arrays` |
+
+## Other arrays
+
+The dish interferometer mode `idish` follows Bull et al. (2015). Each receiver
+has an effective area of 0.7 pi D^2 / 4 and a field of view of (lambda/D)^2,
+and baselines shorter than a dish are dropped from n(x). `arrays.py` holds
+nominal inputs for CHORD, HIRAX and the three CHIME/FRB outriggers, with their
+sources in the module docstring. These inputs show that the forecast runs for
+other arrays, and they are not the design of record of any collaboration.
 
 ## Package boundary
 
@@ -144,7 +155,7 @@ choose a tolerance policy. RFIsher supplies those study choices and records
 the tables and figures. CHIME baseline selection is likewise a caller choice;
 the original experiment default still uses all baselines.
 
-This package does not cover the other telescopes and survey modes, galaxy surveys,
+This package does not cover single-dish, phased-array-feed or aperture-array modes, galaxy surveys,
 modified gravity, neutrino and non-Gaussianity parameters, CAMB execution, the
 redshift-binning and plotting helpers, or the CHIME Overview's multi-bin combination.
 These are in the full code at commit ae723f7 of this repository.
