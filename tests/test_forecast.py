@@ -153,6 +153,25 @@ def test_invalid_redshift_bin_is_refused(inputs, bounds):
         rf.prepare_bin(*bounds, cosmo, expt, fns)
 
 
+@pytest.mark.parametrize("bounds", [(0.1, 0.2), (6.1, 6.3)])
+def test_a_bin_centered_outside_the_bias_table_is_refused(inputs, bounds):
+    cosmo, expt, fns = inputs
+    with pytest.raises(ValueError, match="HI bias table, z = 0.2 to 6.1"):
+        rf.prepare_bin(*bounds, cosmo, expt, fns)
+
+
+def test_brightness_temperature_follows_the_dark_energy_model():
+    z = np.array([0.5, 1.5, 2.5])
+    cosmo = dict(rf.chime.cosmo, w0=-0.9, wa=0.2)
+    expected = 188 * cosmo["h"] * bf.omega_HI(z) * (1 + z) ** 2 / bf.Ez(cosmo, z)
+    np.testing.assert_allclose(bf.Tb(z, cosmo), expected, rtol=1e-14)
+    assert np.all(bf.Tb(z, cosmo) != bf.Tb(z, rf.chime.cosmo))
+    # LambdaCDM keeps the earlier expression to the last bit
+    om, ol = rf.chime.cosmo["omega_M_0"], rf.chime.cosmo["omega_lambda_0"]
+    flat = 188 * rf.chime.cosmo["h"] * bf.omega_HI(z) * (1 + z) ** 2. / np.sqrt(om * (1 + z) ** 3. + (1 - om - ol) * (1 + z) ** 2. + ol)
+    np.testing.assert_array_equal(bf.Tb(z, rf.chime.cosmo), flat)
+
+
 def test_direct_derivative_is_opt_in(inputs):
     cosmo, expt, fns = inputs
     default, *_ = rf.prepare_bin(ZMIN, ZMAX, cosmo, expt, fns)
