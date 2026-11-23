@@ -34,7 +34,8 @@ from .castorina import hi_bias
 from .instrument import MODES, beam_width, collecting_area_m2, mode_limits, wavelength_m
 from .units import FORECAST_LIGHT_SPEED_KM_S
 
-# Samples in k and mu for the Simpson integration in fisher().
+# Samples in k and mu for the Simpson integration in fisher(). Both counts are even, and scipy's
+# rule for an even count changed in 1.11, so this grid gives one set of numbers only on scipy >= 1.11.
 NSAMP_K = 500
 NSAMP_U = 1500
 
@@ -203,7 +204,10 @@ def Tb(z, cosmo):
     omegaHI = omega_HI(z)
     om = cosmo['omega_M_0']; ol = cosmo['omega_lambda_0']
     ok = 1. - om - ol
-    E = np.sqrt(om*(1.+z)**3. + ok*(1.+z)**2. + ol)
+    # E(z) of Ez(), kept in powers of (1 + z) so that the LambdaCDM values do not change in the last bit
+    a = 1. / (1. + z)
+    omegaDE = ol * np.exp(3.*cosmo['wa']*(a - 1.)) / a**(3.*(1. + cosmo['w0'] + cosmo['wa']))
+    E = np.sqrt(om*(1.+z)**3. + ok*(1.+z)**2. + omegaDE)
     return 188. * cosmo['h'] * omegaHI * (1.+z)**2. / E
 
 
@@ -514,6 +518,9 @@ def prepare_bin(zmin, zmax, cosmo, expt, cosmo_fns, kmin=1e-7, kmax=1.0,
         raise ValueError("redshift bounds must satisfy 0 <= zmin < zmax")
     if not np.isfinite([kmin, kmax]).all() or not 0 < kmin < kmax:
         raise ValueError("wavenumber bounds must satisfy 0 < kmin < kmax")
+    if not hi_bias.x[0] <= 0.5 * (zmin + zmax) <= hi_bias.x[-1]:
+        raise ValueError(f"the bin center z = {0.5 * (zmin + zmax):.3f} is outside the HI bias table, "
+                         f"z = {hi_bias.x[0]:g} to {hi_bias.x[-1]:g}")
     # Work on copies so preparing this bin does not change the caller's inputs.
     cosmo = copy.deepcopy(cosmo)
     expt = copy.deepcopy(expt)
